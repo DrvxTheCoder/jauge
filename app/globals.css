@@ -1,0 +1,274 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Tokens. A tenant sets ONE colour (--brand); every shade is derived
+   from it with color-mix, so any hex a company picks re-tints the app.
+   ------------------------------------------------------------------ */
+:root {
+  --brand: #17603b;
+
+  --canvas: #e8ebe8;
+  --board: #f2f4f2;
+  --card: #fbfcfb;
+  --ink: #16201a;
+  --muted: #69736d;
+  --faint: #9aa39e;
+  --line: #e1e6e2;
+
+  --ok: #23854f;
+  --warn: #c98a0b;
+  --alert: #c2412d;
+
+  --b-950: color-mix(in oklab, var(--brand) 52%, #04110a);
+  --b-800: color-mix(in oklab, var(--brand) 82%, #04110a);
+  --b-600: var(--brand);
+  --b-400: color-mix(in oklab, var(--brand) 58%, white);
+  --b-200: color-mix(in oklab, var(--brand) 24%, white);
+  --b-100: color-mix(in oklab, var(--brand) 11%, white);
+  --b-50: color-mix(in oklab, var(--brand) 5%, white);
+  --hatch: color-mix(in oklab, var(--brand) 22%, #c9cfcb);
+
+  /* Bklit chart tokens, derived from the brand like everything else. */
+  --chart-1: var(--b-800);
+  --chart-2: var(--b-600);
+  --chart-3: var(--b-400);
+  --chart-4: var(--b-200);
+  --chart-5: var(--b-100);
+  --chart-background: var(--card);
+  --chart-foreground: var(--ink);
+  --chart-foreground-muted: var(--muted);
+  --chart-line-primary: var(--b-800);
+  --chart-line-secondary: var(--faint);
+  --chart-crosshair: var(--b-400);
+  --chart-indicator-color: var(--b-400);
+  --chart-indicator-secondary-color: var(--faint);
+  --chart-grid: var(--line);
+  --chart-brush-border: var(--line);
+  --chart-label: var(--muted);
+  --chart-tooltip-background: color-mix(in oklab, var(--b-950) 94%, transparent);
+  --chart-tooltip-foreground: #fff;
+  --chart-tooltip-muted: rgb(255 255 255 / 0.68);
+  --chart-marker-background: var(--card);
+  --chart-marker-border: var(--line);
+  --chart-marker-foreground: var(--ink);
+  --chart-marker-badge-background: var(--b-800);
+  --chart-marker-badge-foreground: #fff;
+  --chart-segment-background: var(--b-50);
+  --chart-segment-line: var(--b-400);
+  --foreground: var(--ink);
+  --border: var(--line);
+  --muted-foreground: var(--muted);
+}
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: var(--canvas);
+  --color-board: var(--board);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-alert: var(--alert);
+
+  --color-brand-950: var(--b-950);
+  --color-brand-800: var(--b-800);
+  --color-brand-600: var(--b-600);
+  --color-brand-400: var(--b-400);
+  --color-brand-200: var(--b-200);
+  --color-brand-100: var(--b-100);
+  --color-brand-50: var(--b-50);
+
+  --color-foreground: var(--ink);
+  --color-chart-label: var(--chart-label);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+
+  --radius-card: 22px;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden; /* only <main> scrolls */
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 0;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--b-600);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+/* Command palette: Radix waits for the closing animation before unmounting.
+   `transform` composes with the `translate` Tailwind uses for centring. */
+@keyframes cmd-fade-in {
+  from { opacity: 0; }
+}
+@keyframes cmd-fade-out {
+  to { opacity: 0; }
+}
+@keyframes cmd-pop-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+}
+@keyframes cmd-pop-out {
+  to { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+.cmd-overlay[data-state="open"] { animation: cmd-fade-in 0.2s ease-out; }
+.cmd-overlay[data-state="closed"] { animation: cmd-fade-out 0.15s ease-in forwards; }
+.cmd-content[data-state="open"] { animation: cmd-pop-in 0.26s cubic-bezier(0.2, 0.9, 0.25, 1); }
+.cmd-content[data-state="closed"] { animation: cmd-pop-out 0.14s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .cmd-overlay, .cmd-content { animation: none !important; }
+}
+
+/* Text fields always match :focus-visible; they signal focus with their
+   own border instead of the ring. */
+input:not([type="checkbox"], [type="radio"], [type="color"], [type="range"]):focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+/* Minimal scrollbars: a slim rounded thumb, no track, kept clear of the
+   rounded corners. WebKit/Blink get the pseudo-elements, Firefox the
+   standard properties. */
+.scroll-area {
+  --thumb: color-mix(in oklab, var(--ink) 16%, transparent);
+  --thumb-hover: color-mix(in oklab, var(--ink) 32%, transparent);
+}
+.scroll-area::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 14px;
+}
+.scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--thumb);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+.scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: var(--thumb-hover);
+}
+.scroll-area::-webkit-scrollbar-corner {
+  background: transparent;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-area {
+    scrollbar-width: thin;
+    scrollbar-color: var(--thumb) transparent;
+  }
+}
+
+/* Swipeable rows (tabs, segmented controls) scroll without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* A switched-in panel settles into place. */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.panel-in {
+  animation: panel-in 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+/* Hatched fill used for "planned / not yet closed" and for tank headspace */
+.hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--hatch) 0 2px,
+    transparent 2px 7px
+  );
+}
+
+/* Hero card surface */
+.surface-deep {
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, var(--b-600) 70%, transparent), transparent 60%),
+    linear-gradient(160deg, var(--b-800), var(--b-950));
+  color: white;
+}
+
+/* Fine contour lines on dark cards, a nod to gauge charts */
+.contours {
+  position: relative;
+  isolation: isolate;
+}
+.contours::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 105% 115%, transparent 0 34%, rgba(255, 255, 255, 0.07) 34.2% 34.6%, transparent 35%),
+    radial-gradient(circle at 105% 115%, transparent 0 46%, rgba(255, 255, 255, 0.06) 46.2% 46.6%, transparent 47%),
+    radial-gradient(circle at 105% 115%, transparent 0 58%, rgba(255, 255, 255, 0.05) 58.2% 58.6%, transparent 59%),
+    radial-gradient(circle at 105% 115%, transparent 0 70%, rgba(255, 255, 255, 0.04) 70.2% 70.6%, transparent 71%);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Dashboard bento: mirrors the reference layout, collapses cleanly. */
+.dash-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  grid-template-areas: "s1" "s2" "s3" "s4" "re" "tr" "an" "pg" "tm" "pr";
+}
+@media (min-width: 640px) {
+  .dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "s1 s2" "s3 s4" "an an" "re tr" "pg pr" "tm tm";
+  }
+}
+@media (min-width: 1280px) {
+  .dash-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: auto minmax(300px, auto) auto auto;
+    grid-template-areas:
+      "s1 s2 s3 s4"
+      "an an re pr"
+      "tm tm pg pr"
+      "tm tm pg tr";
+  }
+}

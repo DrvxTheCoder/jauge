@@ -1,0 +1,137 @@
+"use client";
+
+import { Pause, Play } from "@/components/ui/icons";
+import { toMin } from "@/lib/calc";
+import { useNow, useStore } from "@/lib/store";
+import { cn, fmt } from "@/lib/format";
+import type { Inventory } from "@/lib/types";
+
+/* Rolling odometer digits — each digit is a 0–9 column that slides. */
+function Digit({ d }: { d: number }) {
+  return (
+    <span
+      className="relative inline-block h-[1em] w-[0.70em] overflow-hidden leading-none"
+      aria-hidden
+    >
+      <span
+        className="absolute inset-x-0 top-0 flex flex-col items-center transition-transform duration-500 ease-[cubic-bezier(.3,1.25,.5,1)]"
+        style={{ transform: `translateY(${-d * 10}%)` }}
+      >
+        {Array.from({ length: 10 }, (_, i) => (
+          <span
+            key={i}
+            className="block h-[1em] w-full text-center leading-[1em]"
+          >
+            {i}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+export function RollingClock({ seconds, className }: { seconds: number; className?: string }) {
+  const s = Math.max(Math.floor(seconds), 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  const parts = [h, m, r].map((n) => String(n).padStart(2, "0"));
+  const label = `${h} heures ${m} minutes ${r} secondes`;
+  return (
+    <span role="timer" aria-label={label} className={cn("tnum inline-flex items-center font-medium tracking-[-0.03em]", className)}>
+      {parts.map((p, i) => (
+        <span key={i} className="inline-flex items-center gap-0.5">
+          {i > 0 && <span className="-translate-y-[0.06em] opacity-70">:</span>}
+          <Digit d={Number(p[0])} />
+          <Digit d={Number(p[1])} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Live productive time for an inventory in progress: elapsed − lunch − stops − running pause. */
+export function liveSeconds(inv: Inventory, now: Date, lunchMin: number) {
+  const start = toMin(inv.heureDebut) ?? 480;
+  const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  let elapsed = nowSec - start * 60;
+  if (elapsed < 0) elapsed += 86400;
+  if (elapsed > 5 * 3600) elapsed -= lunchMin * 60; // lunch taken after five hours
+  const stops = inv.stops.reduce((a, s) => a + s.minutes, 0) * 60;
+  const paused = inv.pausedAt ? Math.max((now.getTime() - new Date(inv.pausedAt).getTime()) / 1000, 0) : 0;
+  return Math.max(elapsed - stops - paused, 0);
+}
+
+export function LiveTimerCard({ inv, compact }: { inv: Inventory; compact?: boolean }) {
+  const now = useNow(1000);
+  const { config, updateInventory, toast, user } = useStore();
+  const secs = inv.status === "EN_COURS" ? liveSeconds(inv, now, config.rules.lunchBreakMin) : 0;
+  const pausedFor = inv.pausedAt ? Math.floor((now.getTime() - new Date(inv.pausedAt).getTime()) / 1000) : 0;
+
+  const toggle = () => {
+    if (!inv.pausedAt) {
+      updateInventory(inv.id, (i) => ({ ...i, pausedAt: new Date().toISOString() }));
+      toast("Arrêt démarré : le temps utile est en pause");
+      return;
+    }
+    const minutes = Math.max(Math.round(pausedFor / 60), 1);
+    updateInventory(inv.id, (i) => ({
+      ...i,
+      pausedAt: undefined,
+      stops: [
+        ...i.stops,
+        { id: crypto.randomUUID(), type: "Autre", minutes, note: "Saisi depuis le chronomètre", author: user.name, at: new Date().toISOString() },
+      ],
+    }));
+    toast(`Arrêt de ${minutes} min ajouté. Précisez son type dans l'onglet Arrêts.`);
+  };
+
+  return (
+    <div className={cn("surface-deep contours relative flex h-full flex-col overflow-hidden rounded-[var(--radius-card)] p-5", compact && "p-4")}>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-[17px] font-medium">Temps utile</h2>
+        {inv.pausedAt && (
+          <span className="tnum rounded-md bg-warn/90 px-2 py-0.5 text-[12px] font-medium text-white">
+            Arrêt {Math.floor(pausedFor / 60)}:{String(pausedFor % 60).padStart(2, "0")}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-1 items-center justify-center py-3">
+        <RollingClock seconds={secs} className={cn(compact ? "text-[40px]" : "text-[44px] xl:text-[50px]", inv.pausedAt && "opacity-60")} />
+      </div>
+      <div className="w-full flex items-center justify-between">
+        <p className="max-w-[150px] text-[12px] leading-snug text-white/70">
+          {inv.pausedAt ? "Reprendre enregistre l'arrêt" : `Depuis ${inv.heureDebut}, ${inv.stops.length} arrêt${inv.stops.length > 1 ? "s" : ""}`}
+        </p>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={inv.status !== "EN_COURS"}
+          aria-label={inv.pausedAt ? "Reprendre la production et enregistrer l'arrêt" : "Démarrer un arrêt"}
+          className="grid size-12 place-items-center rounded-full bg-white text-brand-950 transition-transform hover:scale-105 disabled:opacity-40"
+        >
+          {inv.pausedAt ? <Play className="size-5 translate-x-px fill-current" /> : <Pause className="size-5 fill-current" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* Horizontal tank level: liquid solid, headspace hatched. */
+export function TankLevel({ name, pct, tonnes, capT }: { name: string; pct: number; tonnes: number; capT: number }) {
+  const p = Math.min(Math.max(pct, 0), 100);
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2">
+      <span className="text-[15px] font-medium">{name}</span>
+      <span className="tnum text-[13px] text-muted">
+        <b className="font-semibold text-ink">{fmt(tonnes, 1)}</b> / {fmt(capT, 0)} T
+      </span>
+      <div className="hatch relative col-span-2 h-3 overflow-hidden rounded-full ring-1 ring-inset ring-[var(--hatch)]">
+        <div
+          className={cn("absolute inset-y-0 left-0 rounded-full transition-[width] duration-700", p < 15 ? "bg-alert" : p > 90 ? "bg-warn" : "bg-brand-800")}
+          style={{ width: `${p}%` }}
+        />
+      </div>
+    </div>
+  );
+}
