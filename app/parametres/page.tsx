@@ -104,7 +104,7 @@ function Inner() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <Card className="h-fit p-2.5">
+        <Card className="h-fit p-2.5 lg:sticky lg:top-[108px]">
           <nav aria-label="Sections des paramètres">
             <ul ref={navRef} className="no-scrollbar relative flex gap-1 overflow-x-auto lg:flex-col">
               <li
@@ -134,7 +134,9 @@ function Inner() {
           </nav>
         </Card>
 
-        <div key={tab} className="panel-in min-w-0">
+        {/* On desktop a long section scrolls inside its own column, so the
+            section list stays beside it. */}
+        <div key={tab} className="panel-in scroll-area min-w-0 lg:-mr-2.5 lg:max-h-[calc(100dvh-140px)] lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
           {tab === "marque" && (
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
               <Card>
@@ -260,18 +262,20 @@ function Inner() {
               <div className="mt-8 flex items-baseline justify-between">
                 <h3 className="text-[16px] font-medium">Lignes de production</h3>
                 <p className="tnum text-[13px] text-muted">
-                  Capacité installée <b className="text-ink">{fmt(c.lines.reduce((a, l) => a + l.capacityTph, 0), 1)} T/h</b>
+                  Capacité installée : <b className="text-ink">{fmt(c.lines.reduce((a, l) => a + l.capacityTph, 0), 1)} T/h</b>
                 </p>
               </div>
               <ul className="mt-3 space-y-2">
                 {c.lines.map((l) => (
                   <li key={l.id} className="grid grid-cols-[1fr_140px_auto] items-end gap-3 rounded-2xl bg-board p-3">
-                    <Field label="Nom">
-                      <input className={inputCls} value={l.name} onChange={(e) => setCentre((x) => ({ ...x, lines: x.lines.map((y) => (y.id === l.id ? { ...y, name: e.target.value } : y)) }))} />
-                    </Field>
-                    <Field label="Capacité" unit="T/h">
-                      <NumberInput value={l.capacityTph} onChange={(v) => setCentre((x) => ({ ...x, lines: x.lines.map((y) => (y.id === l.id ? { ...y, capacityTph: v } : y)) }))} />
-                    </Field>
+                      <div className="flex items-center gap-2">
+                        {/* <small>Designation</small> */}
+                        <input className={cn(inputCls, "mt-1")} placeholder="Nom de la ligne" value={l.name} onChange={(e) => setCentre((x) => ({ ...x, lines: x.lines.map((y) => (y.id === l.id ? { ...y, name: e.target.value } : y)) }))} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <small>Capacité</small>
+                        <NumberInput value={l.capacityTph} onChange={(v) => setCentre((x) => ({ ...x, lines: x.lines.map((y) => (y.id === l.id ? { ...y, capacityTph: v } : y)) }))} />
+                      </div>
                     <RemoveBtn label={`Supprimer ${l.name}`} disabled={c.lines.length <= 1} onClick={() => setCentre((x) => ({ ...x, lines: x.lines.filter((y) => y.id !== l.id) }))} />
                   </li>
                 ))}

@@ -82,7 +82,7 @@ export function EcartHeatmap({ cells, rules, onOpen }: { cells: HeatCell[]; rule
       {/* Padding gives scaled edge cells room inside the scroller. */}
       <div ref={scrollRef} className="-m-3 overflow-x-auto p-3">
         <div
-          className={cn("grid max-w-[820px] min-w-[560px] grid-flow-col grid-rows-7 gap-1", focus != null && cells[focus]?.invId && "cursor-pointer")}
+          className={cn("grid max-w-205 min-w-140 grid-flow-col grid-rows-7 gap-1", focus != null && cells[focus]?.invId && "cursor-pointer")}
           role="group"
           aria-label="Écarts journaliers sur 20 semaines"
           onMouseLeave={hide}
@@ -102,7 +102,7 @@ export function EcartHeatmap({ cells, rules, onOpen }: { cells: HeatCell[]; rule
             };
             const label = `${cap(fmtDate(c.date, { weekday: "long", day: "numeric", month: "long" }))} : ${c.v == null ? "pas d'inventaire clôturé" : `${fmt(c.v, 2)} %`}`;
             if (c.future) return <span key={c.date} className="aspect-square" aria-hidden />;
-            const cls = cn("relative aspect-square rounded-[4px] will-change-transform", tone(c), k === focus && "shadow-[0_6px_16px_-6px_rgba(4,17,10,0.45)]");
+            const cls = cn("relative aspect-square rounded-[4px] will-change-transform cursor-pointer", tone(c), k === focus && "shadow-[0_6px_16px_-6px_rgba(4,17,10,0.45)]");
             return c.invId ? (
               <button
                 key={c.date}
@@ -123,7 +123,7 @@ export function EcartHeatmap({ cells, rules, onOpen }: { cells: HeatCell[]; rule
 
       <div
         aria-hidden
-        className="pointer-events-none absolute top-0 left-0 z-10 rounded-xl bg-[var(--chart-tooltip-background)] px-3 py-2 text-[12px] whitespace-nowrap text-white shadow-[0_12px_28px_-12px_rgba(4,17,10,0.6)] backdrop-blur-sm"
+        className="pointer-events-none absolute top-0 left-0 z-10 rounded-xl bg-chart-tooltip-background px-3 py-2 text-[12px] whitespace-nowrap text-white shadow-[0_12px_28px_-12px_rgba(4,17,10,0.6)] backdrop-blur-sm"
         style={{
           opacity: on ? 1 : 0,
           transform: `translate(${tip?.x ?? 0}px, ${(tip?.y ?? 0) - (on ? 10 : 4)}px) translate(-50%, -100%)`,

@@ -183,14 +183,14 @@ export function Breakdown({
 
   return (
     <div className="@container">
-      <div className="flex flex-col items-center gap-5 @lg:flex-row">
+      <div className="flex flex-col items-center gap-6 @md:flex-row">
         <div className="relative shrink-0">
           <PieChart
             data={data}
             size={176}
             innerRadius={pie ? 0 : 56}
-            padAngle={pie ? 0.02 : 0.035}
-            cornerRadius={pie ? 6 : 8}
+            padAngle={0}
+            cornerRadius={0}
             hoverOffset={pie ? 8 : 6}
             hoveredIndex={active}
             onHoverChange={setActive}
@@ -255,63 +255,33 @@ export function Donut({ items, centerLabel, unit = "T" }: { items: { label: stri
 }
 
 /* ------------------------------------------------------------------
-   Production time: concentric rings, total on the outside, useful time
-   inside. The centre reads the useful share, or the hovered ring.
+   Production time: one ring filled with the useful share of the total.
+   The centre reads the total hours, or the useful hours on hover.
    ------------------------------------------------------------------ */
 export function TimeRings({ totalMin, utileMin }: { totalMin: number; utileMin: number }) {
-  const [active, setActive] = useState<number | null>(null);
   const total = Math.max(totalMin, 0);
   const utile = Math.min(Math.max(utileMin, 0), total);
   const h = (m: number) => m / 60;
-  // Bklit draws ring 0 innermost: useful time inside, the full total around it.
-  const rings = [
-    { label: "Temps utile", value: h(utile), maxValue: Math.max(h(total), 0.01), color: "var(--b-800)" },
-    { label: "Temps de production", value: h(total), maxValue: Math.max(h(total), 0.01), color: "var(--b-400)" },
-  ];
-  const legend = [1, 0]; // read outside-in
+  const rings = [{ label: "Temps utile", value: h(utile), maxValue: Math.max(h(total), 0.01), color: "var(--b-800)" }];
   const pct = total ? (utile / total) * 100 : 0;
 
   return (
-    <div className="flex flex-col items-center gap-5">
-      <RingChart data={rings} size={184} strokeWidth={14} ringGap={7} baseInnerRadius={56} hoveredIndex={active} onHoverChange={setActive}>
-        {rings.map((r, i) => (
-          <Ring key={r.label} index={i} lineCap="round" showGlow={false} />
-        ))}
+    <div className="mx-auto aspect-square w-full max-w-[220px]">
+      <RingChart data={rings} strokeWidth={24} ringGap={0} baseInnerRadius={104}>
+        <Ring index={0} lineCap="round" showGlow={false} />
         <RingCenter>
           {({ data }) => (
             <div className="text-center">
-              <p className="text-[22px] leading-none font-semibold tracking-[-0.02em]">
-                {data ? <AnimatedNumber value={data.value} decimals={1} suffix=" h" /> : <AnimatedNumber value={pct} decimals={0} suffix=" %" />}
+              <p className="text-[26px] leading-none font-semibold tracking-[-0.03em]">
+                <AnimatedNumber value={data ? data.value : h(total)} decimals={1} suffix=" h" />
               </p>
-              <p className="mt-1 text-[12px] text-muted">{data ? data.label.replace("Temps ", "") : "de temps utile"}</p>
+              <p className="tnum mt-1.5 text-[12px] text-muted">
+                {data ? "de temps utile" : <>de production (<AnimatedNumber value={pct} decimals={0} suffix=" %" /> utile)</>}
+              </p>
             </div>
           )}
         </RingCenter>
       </RingChart>
-      <ul className="w-full space-y-1">
-        {legend.map((i) => {
-          const r = rings[i];
-          return (
-            <li key={r.label}>
-              <button
-                type="button"
-                onMouseEnter={() => setActive(i)}
-                onMouseLeave={() => setActive(null)}
-                onFocus={() => setActive(i)}
-                onBlur={() => setActive(null)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[14px] transition-[background-color,opacity] duration-200",
-                  active === i ? "bg-board" : active != null && "opacity-50",
-                )}
-              >
-                <span className="size-2.5 shrink-0 rounded-full" style={{ background: r.color }} aria-hidden />
-                <span className="flex-1">{r.label}</span>
-                <b className="tnum font-medium">{fmt(r.value, 1)} h</b>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }

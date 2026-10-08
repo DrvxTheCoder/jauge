@@ -239,7 +239,7 @@ function Inner() {
                           <span
                             className={cn(
                               "h-1.5 flex-1 rounded-full",
-                              r.inv.status === "EN_COURS" ? "hatch ring-1 ring-[var(--hatch)]" : worst === "ok" ? "bg-ok" : worst === "warn" ? "bg-warn" : "bg-alert",
+                              r.inv.status === "EN_COURS" ? "hatch" : worst === "ok" ? "bg-ok" : worst === "warn" ? "bg-warn" : "bg-alert",
                             )}
                           />
                         </span>
@@ -269,7 +269,7 @@ function Inner() {
               <li className="flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-full bg-ok" />Écart ≤ {config.rules.ecartOk} %</li>
               <li className="flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-full bg-warn" />Jusqu&apos;à {config.rules.ecartWarn} %</li>
               <li className="flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-full bg-alert" />Au-delà</li>
-              <li className="flex items-center gap-1.5"><span className="hatch h-1.5 w-4 rounded-full ring-1 ring-[var(--hatch)]" />En cours</li>
+              <li className="flex items-center gap-1.5"><span className="hatch h-1.5 w-4 rounded-full" />En cours</li>
             </ul>
           </Card>
         )}

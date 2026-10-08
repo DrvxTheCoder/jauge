@@ -580,7 +580,7 @@ export default function FichePage() {
         </div>
 
         {/* Mass balance */}
-        <aside className="xl:sticky xl:top-0 xl:self-start">
+        <aside className="xl:sticky xl:top-[100px] xl:self-start">
           <Card className="overflow-hidden p-0">
             <div className="p-5">
               <CardTitle>Bilan de stock</CardTitle>

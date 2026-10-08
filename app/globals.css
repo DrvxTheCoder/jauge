@@ -91,10 +91,16 @@
   --radius-card: 22px;
 }
 
+/* The page scrolls on the root, with the bar hidden; the shell's scroll
+   button stands in for it. */
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
 html,
 body {
-  height: 100%;
-  overflow: hidden; /* only <main> scrolls */
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
@@ -194,13 +200,25 @@ textarea:focus-visible {
   animation: panel-in 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
 }
 
-/* Hatched fill used for "planned / not yet closed" and for tank headspace */
+/* Hatched fill used for "planned / not yet closed" and for tank headspace.
+   Same tile as the Bklit bar pattern (<Hatch>, visx PatternLines "diagonal",
+   7px, 1.6px stroke), drawn as an SVG mask so it keeps the themed colour.
+   The layer sits under the element's children (z-index -1 in its own
+   stacking context), so fills drawn inside stay on top. */
 .hatch {
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--hatch) 0 2px,
-    transparent 2px 7px
-  );
+  position: relative;
+  isolation: isolate;
+}
+.hatch::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-color: var(--hatch);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0,7 l7,-7 M-1.75,1.75 l3.5,-3.5 M5.25,8.75 l3.5,-3.5' stroke='black' stroke-width='1.6' stroke-linecap='square'/%3E%3C/svg%3E");
+  mask-size: 7px 7px;
 }
 
 /* Hero card surface */

@@ -126,7 +126,7 @@ export function TankLevel({ name, pct, tonnes, capT }: { name: string; pct: numb
       <span className="tnum text-[13px] text-muted">
         <b className="font-semibold text-ink">{fmt(tonnes, 1)}</b> / {fmt(capT, 0)} T
       </span>
-      <div className="hatch relative col-span-2 h-3 overflow-hidden rounded-full ring-1 ring-inset ring-[var(--hatch)]">
+      <div className="hatch col-span-2 h-3 overflow-hidden rounded-full">
         <div
           className={cn("absolute inset-y-0 left-0 rounded-full transition-[width] duration-700", p < 15 ? "bg-alert" : p > 90 ? "bg-warn" : "bg-brand-800")}
           style={{ width: `${p}%` }}

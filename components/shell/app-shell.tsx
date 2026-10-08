@@ -18,6 +18,7 @@ import {
   FileDown,
   PanelLeftClose,
   PanelLeftOpen,
+  ArrowDown,
 } from "@/components/ui/icons";
 import { useStore } from "@/lib/store";
 import { Toast } from "@/components/ui/primitives";
@@ -167,7 +168,7 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
     <>
       <aside
         className={cn(
-          "fixed inset-y-3 left-3 z-40 flex w-[248px] flex-col overflow-hidden rounded-[26px] bg-board p-5 transition-[translate,width,box-shadow] duration-[420ms] ease-[cubic-bezier(.2,.9,.25,1)] lg:static lg:z-auto lg:shrink-0 lg:translate-x-0",
+          "fixed inset-y-3 left-3 z-40 flex w-[248px] flex-col overflow-hidden rounded-[26px] bg-board p-5 transition-[translate,width,box-shadow] duration-[420ms] ease-[cubic-bezier(.2,.9,.25,1)] lg:sticky lg:top-3 lg:bottom-auto lg:z-auto lg:h-[calc(100dvh-1.5rem)] lg:shrink-0 lg:self-start lg:translate-x-0",
           collapsed && "lg:w-[84px]",
           open ? "translate-x-0 shadow-2xl" : "-translate-x-[110%]",
         )}
@@ -305,23 +306,75 @@ function CentreSwitcher() {
   );
 }
 
-function Topbar({ onMenu, collapsed, onCollapse }: { onMenu: () => void; collapsed: boolean; onCollapse: () => void }) {
+/** Window scroll position, re-read on scroll and on resize. */
+function useWindowScroll() {
+  const [s, setS] = useState({ y: 0, max: 0 });
+  useEffect(() => {
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const el = document.documentElement;
+      setS({ y: window.scrollY, max: el.scrollHeight - window.innerHeight });
+    };
+    const queue = () => {
+      if (!raf) raf = requestAnimationFrame(read);
+    };
+    read();
+    const ro = new ResizeObserver(queue);
+    ro.observe(document.body);
+    window.addEventListener("scroll", queue, { passive: true });
+    window.addEventListener("resize", queue);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("scroll", queue);
+      window.removeEventListener("resize", queue);
+    };
+  }, []);
+  return s;
+}
+
+/**
+ * Stands in for the hidden page scrollbar: points down to jump to the end,
+ * and flips up once past halfway to jump back to the top.
+ */
+function ScrollJump({ y, max }: { y: number; max: number }) {
+  if (max < 40) return null;
+  const up = y > max / 2;
+  return (
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: up ? 0 : max, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}
+      aria-label={up ? "Remonter en haut de la page" : "Aller en bas de la page"}
+      className="fixed right-5 bottom-5 z-30 grid size-11 place-items-center rounded-full bg-card text-muted shadow-[0_8px_24px_-10px_rgb(0_0_0/0.28)] ring-1 ring-line transition-colors hover:text-ink"
+    >
+      <ArrowDown className={cn("size-[18px] transition-transform duration-300 ease-[cubic-bezier(.2,.9,.25,1)]", up && "rotate-180")} strokeWidth={1.8} />
+    </button>
+  );
+}
+
+function Topbar({ onMenu, collapsed, onCollapse, raised }: { onMenu: () => void; collapsed: boolean; onCollapse: () => void; raised: boolean }) {
   const { user, toast, inventories, config } = useStore();
   const initials = user.name.split(" ").map((p) => p[0]).join("");
   const Toggle = collapsed ? PanelLeftOpen : PanelLeftClose;
 
   return (
-    <header className="flex shrink-0 items-center gap-3 rounded-[26px] bg-board p-2.5 pl-3">
+    <header
+      className={cn(
+        "relative flex shrink-0 items-center gap-3 rounded-[26px] bg-board p-2.5 pl-3 transition-shadow duration-300",
+        raised && "shadow-[0_10px_28px_-14px_rgb(0_0_0/0.22)]",
+      )}
+    >
       <button className="grid size-11 place-items-center rounded-full bg-card lg:hidden" onClick={onMenu} aria-label="Ouvrir le menu">
         <Menu className="size-5" />
       </button>
       <button
-        className="hidden size-11 shrink-0 place-items-center rounded-full bg-card text-muted transition-colors hover:text-ink lg:grid"
+        className="hidden size-11 shrink-0 place-items-center rounded-full text-muted transition-colors hover:text-ink lg:grid cursor-pointer"
         onClick={onCollapse}
         aria-label={collapsed ? "Déplier le menu" : "Replier le menu"}
         aria-expanded={!collapsed}
       >
-        <Toggle className="size-[19px]" strokeWidth={1.8} />
+        <Toggle className="size-4" strokeWidth={1.8} />
       </button>
       <CommandMenu collapsed={collapsed} onCollapse={onCollapse} />
       <div className="ml-auto flex items-center gap-2.5">
@@ -372,9 +425,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  // <main> is the only scroller, so each page starts at its top.
+  const scroll = useWindowScroll();
+
+  // Each page starts at its top.
   useEffect(() => {
-    mainRef.current?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
   }, [path]);
 
   // One orchestrated entrance per page: cards settle in, in reading order.
@@ -399,24 +454,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Expanded fills the window, keeping the same 12px gutter on every side.
     <div
       className={cn(
-        "mx-auto flex h-dvh gap-3 overflow-hidden p-3 transition-[max-width] duration-[420ms] ease-[cubic-bezier(.2,.9,.25,1)]",
+        "mx-auto flex min-h-dvh gap-3 p-3 transition-[max-width] duration-420 ease-[cubic-bezier(.2,.9,.25,1)]",
         density === "expanded" ? "max-w-full" : "max-w-[1680px]",
       )}
     >
       <Sidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <Topbar onMenu={() => setOpen(true)} collapsed={collapsed} onCollapse={toggleCollapsed} />
-        <main
-          ref={mainRef}
-          id="main"
-          className="scroll-area min-h-0 flex-1 overflow-y-auto rounded-[26px] bg-board p-4 pr-1.5 scrollbar-gutter-stable sm:p-5 sm:pr-2.5"
-        >
+        {/* Sticky, backed by canvas down to its middle: the gutter above and
+            the top corners read as page background, while content slides
+            right under its lower edge. */}
+        <div className="sticky top-0 z-20 -mt-3 pt-3">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-11 bg-canvas" />
+          <Topbar onMenu={() => setOpen(true)} collapsed={collapsed} onCollapse={toggleCollapsed} raised={scroll.y > 0} />
+        </div>
+        <main ref={mainRef} id="main" className="flex-1 rounded-[26px] bg-board p-4 sm:p-5">
           <div className="mb-4 md:hidden">
             <CentreSwitcher />
           </div>
           {ready ? children : <div className="grid h-[60vh] place-items-center text-muted">Chargement…</div>}
         </main>
       </div>
+      <ScrollJump y={scroll.y} max={scroll.max} />
       <Toast msg={toastMsg} />
     </div>
   );

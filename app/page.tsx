@@ -163,7 +163,7 @@ export default function Dashboard() {
             <span className="ml-1 text-[20px] font-medium text-muted">T/h</span>
           </p>
           <div>
-            <div className="hatch h-2 overflow-hidden rounded-full ring-1 ring-inset ring-[var(--hatch)]">
+            <div className="hatch h-2 overflow-hidden rounded-full">
               <div className="h-full rounded-full bg-brand-600" style={{ width: `${Math.min(aCur.capacityPct, 100)}%` }} />
             </div>
             <p className="tnum mt-2 text-[13px] text-muted">{fmt(aCur.capacityPct, 0)} % de la capacité installée</p>
@@ -228,14 +228,14 @@ export default function Dashboard() {
         </Card>
 
         {/* Recent */}
-        <Card className="[grid-area:pr]">
+        <Card className="[grid-area:pr] h-fit">
           <div className="mb-3 flex items-center justify-between">
             <CardTitle>Inventaires récents</CardTitle>
             <Link href="/inventaires" className="rounded-full border border-ink/70 px-3 py-1 text-[13px] font-medium whitespace-nowrap hover:bg-brand-50">
               Tout voir
             </Link>
           </div>
-          <ul className="divide-y divide-line">
+          <ul className="">
             {recent.map((i) => {
               const s = summarize(i, centre(i.centreId), config);
               const band = ecartBand(s.ecartPct, config.rules);

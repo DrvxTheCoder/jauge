@@ -6,6 +6,7 @@ import {
   Activity01Icon,
   ArrowDataTransferHorizontalIcon,
   ArrowDown01Icon,
+  ArrowDown02Icon,
   ArrowLeft01Icon,
   ArrowLeft02Icon,
   ArrowRight01Icon,
@@ -85,6 +86,7 @@ export const ArrowLeft = make(ArrowLeft02Icon);
 export const ChevronLeft = make(ArrowLeft01Icon);
 export const ChevronRight = make(ArrowRight01Icon);
 export const ChevronDown = make(ArrowDown01Icon);
+export const ArrowDown = make(ArrowDown02Icon);
 
 // Pickers
 export const CalendarDays = make(Calendar03Icon);
