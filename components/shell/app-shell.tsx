@@ -24,7 +24,9 @@ import { useStore } from "@/lib/store";
 import { Select } from "@/components/ui/select";
 import { CommandMenu } from "./command-menu";
 import { Island } from "./island";
-import { cn, fmtDate } from "@/lib/format";
+import { cn } from "@/lib/format";
+import { buildYearReport } from "@/lib/year-report";
+import { failingExport } from "@/lib/dev/failing-export"; // DEV ONLY, temporary
 
 gsap.registerPlugin(useGSAP);
 
@@ -136,7 +138,7 @@ function SectionLabel({ collapsed, className, children }: { collapsed: boolean; 
 
 function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => void; collapsed: boolean }) {
   const path = usePathname();
-  const { inventories, toast, config } = useStore();
+  const { inventories, toast, config, startJob } = useStore();
   const openCount = inventories.filter((i) => i.status === "EN_COURS").length;
   const navRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLSpanElement>(null);
@@ -155,9 +157,16 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
 
   useEffect(() => hide(true), [path, hide]);
 
-  const lastMonth = new Date();
-  lastMonth.setDate(0);
-  const reportLabel = `Rapport mensuel de ${fmtDate(lastMonth.toISOString().slice(0, 10), { month: "long" })}`;
+  const year = new Date().getFullYear();
+  const reportLabel = `Rapport annuel ${year}`;
+  // Runs in the background; the hub shows its progress and outcome.
+  const exportYear = () =>
+    startJob({
+      kind: "export",
+      busyMsg: "Un export est déjà en cours",
+      doneMsg: "Rapport annuel téléchargé",
+      run: (onProgress) => buildYearReport({ inventories, config, year, onProgress }),
+    });
 
   // Labels keep their full-width layout and are clipped by the rail, so
   // nothing reflows while the width animates.
@@ -267,15 +276,16 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
             <p className="mt-3 text-[16px] leading-snug font-medium">{reportLabel}</p>
             <p className="mt-1 text-[12px] text-white/70">{config.branding.companyName}, tous centres</p>
             <button
-              onClick={() => toast("Export PDF à venir")}
+              onClick={exportYear}
               className="mt-4 h-10 w-full rounded-full bg-brand-600 text-[14px] font-medium text-white ring-1 ring-white/15 hover:bg-brand-400 hover:text-brand-950"
             >
-              Télécharger le PDF
+              Exporter l&apos;année en PDF
             </button>
+            <DevFailingExport />
           </div>
           <button
-            onClick={() => toast("Export PDF à venir")}
-            aria-label={`${reportLabel}, télécharger le PDF`}
+            onClick={exportYear}
+            aria-label={`${reportLabel}, exporter en PDF`}
             {...bind(`${reportLabel} (PDF)`)}
             className={cn(
               "surface-deep absolute bottom-0 left-0 hidden size-11 place-items-center rounded-xl transition-[opacity,scale,visibility] duration-300 lg:grid",
@@ -289,6 +299,25 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
       {tooltip}
       {open && <div className="fixed inset-0 z-30 bg-brand-950/25 lg:hidden" onClick={onClose} aria-hidden />}
     </>
+  );
+}
+
+/**
+ * DEV ONLY. Temporary: starts an export that fails after a minute, to check
+ * the hub's progress-to-error transition. Remove this component, its use
+ * above, and lib/dev/failing-export.ts.
+ */
+function DevFailingExport() {
+  const { startJob } = useStore();
+  return (
+    <button
+      onClick={() =>
+        startJob({ kind: "export", busyMsg: "Un export est déjà en cours", doneMsg: "", run: failingExport })
+      }
+      className="mt-2 h-8 w-full rounded-full border border-dashed border-white/35 text-[12px] text-white/75 hover:bg-white/10"
+    >
+      Test (dev) : export en échec
+    </button>
   );
 }
 

@@ -138,7 +138,7 @@ export function PauseGlyph({ className, still, breathe }: AnimatedIconProps & { 
       }
     />
   );
-  return <Svg className={className}>{[4, 15].map(bar)}</Svg>;
+  return <Svg className={className}>{[5.5, 13.5].map(bar)}</Svg>;
 }
 
 /** Clock whose hand sweeps continuously: something is running. */
@@ -158,30 +158,60 @@ export function ClockGlyph({ className, still }: AnimatedIconProps) {
   );
 }
 
-/** Page edges with arrows sliding outward (expanded) or inward (compact). */
+/**
+ * Monitor with a sidebar and a content panel. Expanded: the panel widens and
+ * the sidebar slides to the edge; compact: the reverse, the panel narrowing.
+ */
 export function ViewWidthGlyph({ className, still, to }: AnimatedIconProps & { to: "expanded" | "compact" }) {
-  const out = to === "expanded";
-  // Arrow pointing left, and its mirror; heads sit at the travel end.
-  const left = out ? "M10 12H5M7.5 9.5L5 12L7.5 14.5" : "M5 12H10M7.5 9.5L10 12L7.5 14.5";
-  const right = out ? "M14 12H19M16.5 9.5L19 12L16.5 14.5" : "M19 12H14M16.5 9.5L14 12L16.5 14.5";
-  const from = out ? 2.5 : -2.5;
-  const slide = { type: "spring", visualDuration: 0.45, bounce: 0.45, delay: 0.1 } as const;
+  const layouts = {
+    compact: { bar: 7.5, panel: { x: 9.75, width: 8.5 } },
+    expanded: { bar: 6.25, panel: { x: 8.25, width: 10.75 } },
+  };
+  const end = layouts[to];
+  const start = layouts[to === "expanded" ? "compact" : "expanded"];
+  const slide = { type: "spring", visualDuration: 0.45, bounce: 0.35, delay: 0.1 } as const;
   return (
     <Svg className={className}>
+      <rect x="2.75" y="3.75" width="18.5" height="13" rx="3.5" />
+      <path d="M12 16.75V20.25M8.5 20.25H15.5" />
       <motion.path
-        d="M2 5V19"
-        initial={still ? false : { x: out ? 2 : -2 }}
-        animate={{ x: 0 }}
+        d="M0 7.75V13"
+        initial={still ? false : { x: start.bar }}
+        animate={{ x: end.bar }}
         transition={slide}
       />
-      <motion.path
-        d="M22 5V19"
-        initial={still ? false : { x: out ? -2 : 2 }}
-        animate={{ x: 0 }}
+      <motion.rect
+        y="6.75"
+        height="7.5"
+        rx="1.75"
+        fill="currentColor"
+        stroke="none"
+        initial={still ? false : start.panel}
+        animate={end.panel}
         transition={slide}
       />
-      <motion.path d={left} initial={still ? false : { x: from, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={slide} />
-      <motion.path d={right} initial={still ? false : { x: -from, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={slide} />
+    </Svg>
+  );
+}
+
+/**
+ * Determinate ring for background work: a faint track and an arc that eases
+ * toward `progress` (0..1) as it's reported. Starts at twelve o'clock.
+ */
+export function ProgressRing({ className, still, progress }: AnimatedIconProps & { progress: number }) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="12" r="9.25" strokeWidth={2.5} className="opacity-20" />
+      <motion.circle
+        cx="12"
+        cy="12"
+        r="9.25"
+        strokeWidth={2.5}
+        transform="rotate(-90 12 12)"
+        initial={still ? false : { pathLength: 0 }}
+        animate={{ pathLength: Math.max(progress, 0.02) }}
+        transition={still ? { duration: 0 } : { type: "spring", visualDuration: 0.5, bounce: 0 }}
+      />
     </Svg>
   );
 }

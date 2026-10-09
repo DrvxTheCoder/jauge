@@ -30,6 +30,20 @@ function Digit({ d, tight }: { d: number; tight?: boolean }) {
   );
 }
 
+/** A whole percentage on the same rolling digits as the clock. */
+export function RollingPercent({ value, className }: { value: number; className?: string }) {
+  const digits = String(Math.min(Math.max(Math.round(value), 0), 100)).split("");
+  return (
+    <span aria-label={`${digits.join("")} %`} className={cn("tnum inline-flex items-center font-medium tracking-[-0.03em]", className)}>
+      {/* Keyed from the right, so the units digit keeps rolling as tens appear. */}
+      {digits.map((d, i) => (
+        <Digit key={digits.length - i} d={Number(d)} tight />
+      ))}
+      <span aria-hidden className="ml-[0.2em]">%</span>
+    </span>
+  );
+}
+
 /** `tight` packs the digits closer, for small sizes where fixed gaps read loose. */
 export function RollingClock({ seconds, className, tight }: { seconds: number; className?: string; tight?: boolean }) {
   const s = Math.max(Math.floor(seconds), 0);
