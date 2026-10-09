@@ -2,13 +2,16 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Cylinder, Factory, Palette, Plus, RotateCcw, SlidersHorizontal, Trash2, ArrowLeftRight, Container, Monitor } from "@/components/ui/icons";
+import { Cylinder, Factory, Palette, Plus, RotateCcw, SlidersHorizontal, Trash2, ArrowLeftRight, Container, Monitor, Download, FileUp } from "@/components/ui/icons";
 import { useStore, type Density } from "@/lib/store";
 import { cn, fmt } from "@/lib/format";
 import type { Centre, FlowField, TankType, TenantConfig } from "@/lib/types";
-import { Button, Card, CardTitle, Field, NumberInput, glide, inputCls, useIndicator } from "@/components/ui/primitives";
+import { Button, Card, CardTitle, Dialog, Field, NumberInput, glide, inputCls, useIndicator } from "@/components/ui/primitives";
 import { Select } from "@/components/ui/select";
 import { Logo, PRODUCT } from "@/components/shell/app-shell";
+import { CorrectionCard } from "@/components/settings/correction-card";
+import { downloadText, takeFile } from "@/components/settings/files";
+import { exportTenantJson, parseTenantJson } from "@/lib/tenant-io";
 
 type Tab = "marque" | "centres" | "reservoirs" | "flux" | "bouteilles" | "regles" | "affichage";
 const TABS: { id: Tab; label: string; icon: typeof Palette; sub: string }[] = [
@@ -17,7 +20,7 @@ const TABS: { id: Tab; label: string; icon: typeof Palette; sub: string }[] = [
   { id: "reservoirs", label: "Réservoirs", icon: Container, sub: "Sphères, cigares, capacités" },
   { id: "flux", label: "Entrées et sorties", icon: ArrowLeftRight, sub: "Champs propres à chaque centre" },
   { id: "bouteilles", label: "Bouteilles", icon: Cylinder, sub: "Formats et poids unitaires" },
-  { id: "regles", label: "Règles de calcul", icon: SlidersHorizontal, sub: "Seuils, pauses, arrêts" },
+  { id: "regles", label: "Règles de calcul", icon: SlidersHorizontal, sub: "Seuils, arrêts, correction" },
   { id: "affichage", label: "Affichage", icon: Monitor, sub: "Largeur de l'interface" },
 ];
 
@@ -44,6 +47,8 @@ function Inner() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>((params.get("tab") as Tab) || "marque");
   const [cid, setCid] = useState(config.centres[0].id);
+  const [template, setTemplate] = useState<{ name: string; config: TenantConfig | null; errors: string[] } | null>(null);
+  const templateRef = useRef<HTMLInputElement>(null);
   const navRef = useRef<HTMLUListElement>(null);
   const navPill = useIndicator(navRef, '[aria-current="page"]', [tab]);
   const centresRef = useRef<HTMLDivElement>(null);
@@ -91,17 +96,85 @@ function Inner() {
           <h1 className="text-[34px] font-semibold tracking-[-0.03em] sm:text-[40px]">Paramètres</h1>
           <p className="mt-1 text-[15px] text-muted">Adaptez {PRODUCT} aux installations et aux habitudes de {config.branding.companyName}.</p>
         </div>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            resetConfig();
-            toast("Configuration de démonstration restaurée");
-          }}
-        >
-          <RotateCcw className="size-4" />
-          Restaurer la démo
-        </Button>
+        <div className="flex flex-wrap gap-2.5">
+          <Button variant="ghost" onClick={() => downloadText(`modele-${slug(config.branding.companyName)}.json`, exportTenantJson(config), "application/json")}>
+            <Download className="size-4" />
+            Exporter le modèle
+          </Button>
+          <Button variant="ghost" onClick={() => templateRef.current?.click()}>
+            <FileUp className="size-4" />
+            Importer un modèle
+          </Button>
+          <input
+            ref={templateRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={async (e) => {
+              const f = await takeFile(e);
+              if (!f) return;
+              const parsed = parseTenantJson(f.text);
+              setTemplate({ name: f.name, config: parsed.value, errors: parsed.errors });
+            }}
+          />
+          <Button
+            variant="ghost"
+            onClick={() => {
+              resetConfig();
+              toast("Démo restaurée", "success");
+            }}
+          >
+            <RotateCcw className="size-4" />
+            Restaurer la démo
+          </Button>
+        </div>
       </div>
+
+      <Dialog open={template !== null} onClose={() => setTemplate(null)} title={template?.config ? "Appliquer ce modèle ?" : "Modèle refusé"} width="max-w-xl">
+        {template?.config ? (
+          <>
+            <p className="text-[14px] text-muted">
+              <b className="text-ink">{template.name}</b> remplace toute la configuration : {template.config.branding.companyName}, {template.config.centres.length} centre
+              {template.config.centres.length > 1 ? "s" : ""}, {template.config.correction.profiles.length} profil{template.config.correction.profiles.length > 1 ? "s" : ""} de correction. Les inventaires
+              clôturés gardent leurs valeurs.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setTemplate(null)}>
+                Annuler
+              </Button>
+              <Button
+                onClick={() => {
+                  const next = template.config;
+                  if (next) {
+                    setConfig(() => next);
+                    setCid(next.centres[0].id);
+                    toast("Modèle appliqué", "success");
+                  }
+                  setTemplate(null);
+                }}
+              >
+                Appliquer
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[14px] text-muted">
+              <b className="text-ink">{template?.name}</b> n&apos;a pas été appliqué. Rien n&apos;a changé.
+            </p>
+            <ul className="scroll-area mt-4 max-h-64 space-y-1 overflow-y-auto rounded-2xl border border-alert/40 bg-alert/6 p-3 text-[13px] text-alert">
+              {template?.errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+            <div className="mt-6 flex justify-end">
+              <Button variant="ghost" onClick={() => setTemplate(null)}>
+                Fermer
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
 
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         <Card className="h-fit p-2.5 lg:sticky lg:top-[108px]">
@@ -233,7 +306,7 @@ function Inner() {
                       ],
                     }));
                     setCid(id);
-                    toast("Centre ajouté. Ajoutez ses réservoirs avant le premier inventaire.");
+                    toast("Centre ajouté", "success");
                   }}
                 >
                   <Plus className="size-4" />
@@ -296,7 +369,7 @@ function Inner() {
             <Card>
               {CentrePicker}
               <div className="mt-6 overflow-x-auto">
-                <table className="w-full min-w-[760px] text-[14px]">
+                <table className="w-full min-w-[960px] text-[14px]">
                   <thead>
                     <tr className="text-left text-[12px] text-muted">
                       <th className="pb-2 font-medium">Nom</th>
@@ -305,6 +378,7 @@ function Inner() {
                       <th className="pb-2 font-medium">Capacité T</th>
                       <th className="pb-2 font-medium">Hauteur mm</th>
                       <th className="pb-2 font-medium">Calcul</th>
+                      <th className="pb-2 font-medium">Table de correction</th>
                       <th className="pb-2" />
                     </tr>
                   </thead>
@@ -348,6 +422,14 @@ function Inner() {
                               ]}
                             />
                           </td>
+                          <td className="py-2 pr-2">
+                            <Select<string>
+                              ariaLabel="Table de correction"
+                              value={r.profileId ?? ""}
+                              onChange={(v) => upd({ profileId: v || undefined })}
+                              options={[{ value: "", label: "Profil par défaut" }, ...config.correction.profiles.map((p) => ({ value: p.id, label: p.name }))]}
+                            />
+                          </td>
                           <td className="py-2">
                             <RemoveBtn label={`Supprimer ${r.name}`} onClick={() => setCentre((x) => ({ ...x, reservoirs: x.reservoirs.filter((y) => y.id !== r.id) }))} />
                           </td>
@@ -364,7 +446,7 @@ function Inner() {
                   onClick={() =>
                     setCentre((x) => ({
                       ...x,
-                      reservoirs: [...x.reservoirs, { id: `r${Date.now().toString(36)}`, name: `Réservoir ${x.reservoirs.length + 1}`, type: "CIGARE", capacityM3: 100, capacityT: 54, heightMm: 3000, calcMode: "AUTOMATIC" }],
+                      reservoirs: [...x.reservoirs, { id: `r${Date.now().toString(36)}`, name: `Réservoir ${x.reservoirs.length + 1}`, type: "CIGARE", capacityM3: 100, capacityT: 57, heightMm: 3000, calcMode: "AUTOMATIC" }],
                     }))
                   }
                 >
@@ -497,6 +579,7 @@ function FieldList({ title, sub, fields, onChange }: { title: string; sub: strin
 }
 
 function RulesPanel({ config, setConfig }: { config: TenantConfig; setConfig: (fn: (c: TenantConfig) => TenantConfig) => void }) {
+  const { toast } = useStore();
   const [draft, setDraft] = useState("");
   const r = config.rules;
   const setR = (patch: Partial<TenantConfig["rules"]>) => setConfig((cfg) => ({ ...cfg, rules: { ...cfg.rules, ...patch } }));
@@ -523,14 +606,6 @@ function RulesPanel({ config, setConfig }: { config: TenantConfig; setConfig: (f
         <div className="mt-3 grid grid-cols-2 gap-4">
           <Field label="Pause déjeuner déduite" unit="min">
             <NumberInput value={r.lunchBreakMin} step={5} onChange={(v) => setR({ lunchBreakMin: Math.max(Math.round(v), 0) })} />
-          </Field>
-          <Field label="Table de correction">
-            <Select
-              ariaLabel="Table de correction"
-              value={r.correctionTable}
-              onChange={(v) => setR({ correctionTable: v })}
-              options={["ASTM D1250 Table 54E", "ASTM D1250 Table 54B", "Table personnalisée"].map((t) => ({ value: t, label: t }))}
-            />
           </Field>
         </div>
       </Card>
@@ -570,6 +645,8 @@ function RulesPanel({ config, setConfig }: { config: TenantConfig; setConfig: (f
           </Button>
         </form>
       </Card>
+
+      <CorrectionCard config={config} setConfig={setConfig} toast={toast} />
     </div>
   );
 }

@@ -362,17 +362,3 @@ export function Dialog({
 }
 
 /* ---------------- Toast ---------------- */
-export function Toast({ msg }: { msg: string | null }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={cn(
-        "pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-brand-950 px-5 py-3 text-[14px] text-white shadow-lg transition-all duration-300",
-        msg ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
-      )}
-    >
-      {msg}
-    </div>
-  );
-}

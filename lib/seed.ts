@@ -1,5 +1,12 @@
-import { bottleTonnes, vcfLiquid } from "./calc";
-import type { Centre, Inventory, TankReading, TenantConfig } from "./types";
+import { ambientDensity, bottleTonnes, buildClosing } from "./calc";
+import { BUILTIN_PROFILE_ID, builtinProfile, linearExampleProfile, profileFor } from "./correction";
+import type { Centre, CorrectionConfig, CorrectionProfile, Inventory, TankReading, TenantConfig } from "./types";
+
+/* The demo ships the built-in standard table (default) and a linear example, so switching can be shown. */
+const DEMO_CORRECTION: CorrectionConfig = {
+  profiles: [builtinProfile(), linearExampleProfile()],
+  defaultProfileId: BUILTIN_PROFILE_ID,
+};
 
 /* A fictional company used for demos. Nothing here belongs to a real operator. */
 export const DEFAULT_CONFIG: TenantConfig = {
@@ -8,7 +15,6 @@ export const DEFAULT_CONFIG: TenantConfig = {
     ecartOk: 2,
     ecartWarn: 5,
     lunchBreakMin: 60,
-    correctionTable: "ASTM D1250 Table 54E",
     stopTypes: [
       "Problème de bascules",
       "Changement de format",
@@ -42,9 +48,9 @@ export const DEFAULT_CONFIG: TenantConfig = {
         { id: "l3", name: "Ligne B38", capacityTph: 4 },
       ],
       reservoirs: [
-        { id: "s1", name: "Sphère S1", type: "SPHERE", capacityM3: 1000, capacityT: 540, heightMm: 12400, calcMode: "AUTOMATIC" },
-        { id: "s2", name: "Sphère S2", type: "SPHERE", capacityM3: 1000, capacityT: 540, heightMm: 12400, calcMode: "AUTOMATIC" },
-        { id: "c1", name: "Cigare C1", type: "CIGARE", capacityM3: 250, capacityT: 135, heightMm: 3600, calcMode: "AUTOMATIC" },
+        { id: "s1", name: "Sphère S1", type: "SPHERE", capacityM3: 1000, capacityT: 570, heightMm: 12400, calcMode: "AUTOMATIC" },
+        { id: "s2", name: "Sphère S2", type: "SPHERE", capacityM3: 1000, capacityT: 570, heightMm: 12400, calcMode: "AUTOMATIC" },
+        { id: "c1", name: "Cigare C1", type: "CIGARE", capacityM3: 250, capacityT: 142.5, heightMm: 3600, calcMode: "AUTOMATIC" },
       ],
       approFields: [
         { id: "butanier", label: "Butanier" },
@@ -65,8 +71,8 @@ export const DEFAULT_CONFIG: TenantConfig = {
       managers: ["Ibrahima Sarr"],
       lines: [{ id: "k1", name: "Carrousel K1", capacityTph: 6 }],
       reservoirs: [
-        { id: "k-c1", name: "Cigare K1", type: "CIGARE", capacityM3: 300, capacityT: 162, heightMm: 3800, calcMode: "AUTOMATIC" },
-        { id: "k-c2", name: "Cigare K2", type: "CIGARE", capacityM3: 300, capacityT: 162, heightMm: 3800, calcMode: "AUTOMATIC" },
+        { id: "k-c1", name: "Cigare K1", type: "CIGARE", capacityM3: 300, capacityT: 171, heightMm: 3800, calcMode: "AUTOMATIC" },
+        { id: "k-c2", name: "Cigare K2", type: "CIGARE", capacityM3: 300, capacityT: 171, heightMm: 3800, calcMode: "AUTOMATIC" },
       ],
       approFields: [
         { id: "transfertIn", label: "Transfert Rufisque" },
@@ -78,6 +84,7 @@ export const DEFAULT_CONFIG: TenantConfig = {
       ],
     },
   ],
+  correction: DEMO_CORRECTION,
 };
 
 export const OPERATORS: Record<string, string[]> = {
@@ -102,15 +109,19 @@ export const iso = (d: Date) =>
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
-/** Builds tank readings whose liquid masses sum to `targetT`. */
-function readingsFor(centre: Centre, targetT: number, rnd: () => number): Record<string, TankReading> {
+/**
+ * Builds tank readings whose liquid masses sum to `targetT`. Temperatures stay
+ * inside the table (tLiq 24–30 °C, tVap 1–3 °C above) and d15 in a commercial
+ * butane range (0.565–0.577), so no demo reading raises a warning.
+ */
+function readingsFor(centre: Centre, targetT: number, rnd: () => number, profile: CorrectionProfile): Record<string, TankReading> {
   const cap = centre.reservoirs.reduce((a, r) => a + r.capacityT, 0);
   const out: Record<string, TankReading> = {};
   for (const res of centre.reservoirs) {
     const share = targetT * (res.capacityT / cap);
     const tLiq = r1(24 + rnd() * 6);
     const d15 = r3(0.565 + rnd() * 0.012);
-    const vol = share / (d15 * vcfLiquid(tLiq));
+    const vol = share / ambientDensity(profile, d15, tLiq);
     out[res.id] = {
       heightMm: Math.round((vol / res.capacityM3) * res.heightMm),
       tLiq,
@@ -124,10 +135,10 @@ function readingsFor(centre: Centre, targetT: number, rnd: () => number): Record
 }
 
 /** Re-solves tank volumes so the physical stock lands exactly on target (keeps rounding honest). */
-function liquidSum(centre: Centre, tanks: Record<string, TankReading>) {
+function liquidSum(centre: Centre, tanks: Record<string, TankReading>, profile: CorrectionProfile) {
   return centre.reservoirs.reduce((a, res) => {
     const t = tanks[res.id];
-    return a + t.volLiqM3 * t.d15 * vcfLiquid(t.tLiq);
+    return a + t.volLiqM3 * ambientDensity(profile, t.d15, t.tLiq);
   }, 0);
 }
 
@@ -137,8 +148,13 @@ const PROFILE: Record<string, { bottles: Record<string, number>; scale: number }
 };
 
 export function generateInventories(cfg: TenantConfig, today = new Date(), days = 150): Inventory[] {
+  // Demo history was "closed" with the demo's built-in table, whatever the tenant
+  // has configured since: readings and snapshots both use it, for every tank.
+  const demoCfg: TenantConfig = { ...cfg, correction: DEMO_CORRECTION };
+  const profile = profileFor(demoCfg, {});
   const all: Inventory[] = [];
-  for (const centre of cfg.centres) {
+  for (const cfgCentre of cfg.centres) {
+    const centre: Centre = { ...cfgCentre, reservoirs: cfgCentre.reservoirs.map((r) => ({ ...r, profileId: undefined })) };
     const rnd = mulberry32(centre.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) * 9973);
     const cap = centre.reservoirs.reduce((a, r) => a + r.capacityT, 0);
     let stock = cap * 0.55;
@@ -172,12 +188,19 @@ export function generateInventories(cfg: TenantConfig, today = new Date(), days 
       const dayT = bottleTonnes(bottles, cfg).t;
       const nightT = bottleTonnes(nightBottles, cfg).t;
 
-      // Supply: big delivery when the stock runs low, small top-ups otherwise
+      // Supply: big delivery when the stock runs low, small top-ups otherwise,
+      // never more than the room left below ~82 % of capacity (safe filling limit).
       const low = stock < cap * 0.32;
+      let room = Math.max(cap * 0.82 - stock, 0);
+      const supply = (want: number) => {
+        const t = r1(Math.min(want, room));
+        room -= t;
+        return t;
+      };
       const main = centre.approFields[0]?.id;
-      if (main) appro[main] = low ? r1(cap * (0.42 + rr[4] * 0.12)) : rr[5] > 0.82 ? r1(40 + rr[6] * 60) : 0;
-      if (centre.approFields[1]) appro[centre.approFields[1].id] = rr[7] > 0.6 ? r1(10 + rr[8] * 35) : 0;
-      if (centre.approFields[2]) appro[centre.approFields[2].id] = rr[9] > 0.7 ? r1(0.5 + rr[10] * 2.5) : 0;
+      if (main) appro[main] = low ? supply(cap * (0.42 + rr[4] * 0.12)) : rr[5] > 0.82 ? supply(40 + rr[6] * 60) : 0;
+      if (centre.approFields[1]) appro[centre.approFields[1].id] = rr[7] > 0.6 ? supply(10 + rr[8] * 35) : 0;
+      if (centre.approFields[2]) appro[centre.approFields[2].id] = rr[9] > 0.7 ? supply(0.5 + rr[10] * 2.5) : 0;
 
       sorties[centre.sortieFields[0].id] = r1((centre.id === "ruf" ? 8 : 3) + rr[11] * (centre.id === "ruf" ? 18 : 6));
       if (centre.sortieFields[1]) sorties[centre.sortieFields[1].id] = rr[12] > 0.75 ? r1(10 + rr[13] * 20) : 0;
@@ -193,8 +216,8 @@ export function generateInventories(cfg: TenantConfig, today = new Date(), days 
       const ecartPct = roll > 0.985 ? (rr[17] > 0.5 ? 1 : -1) * (5.2 + rr[18] * 1.5) : roll > 0.9 ? (rr[17] > 0.5 ? 1 : -1) * (2.1 + rr[18] * 2.2) : (rr[18] - 0.52) * 2.4;
       const phys = Math.max(theo * (1 + ecartPct / 100), cap * 0.08);
 
-      const tanks = readingsFor(centre, phys, () => rnd());
-      stock = liquidSum(centre, tanks);
+      const tanks = readingsFor(centre, phys, () => rnd(), profile);
+      stock = liquidSum(centre, tanks, profile);
 
       const stopsCount = Math.floor(rr[19] * 3.2);
       const stops = Array.from({ length: stopsCount }, (_, k) => ({
@@ -246,7 +269,9 @@ export function generateInventories(cfg: TenantConfig, today = new Date(), days 
         for (const k of Object.keys(inv.sorties)) inv.sorties[k] = r1(inv.sorties[k] * frac);
         // readings reflect "now"
         const t2 = inv.stockInitial + approT - bottleTonnes(inv.bottles, cfg).t - Object.values(inv.sorties).reduce((a, b) => a + b, 0) - nightT;
-        inv.tanks = readingsFor(centre, t2 * 1.004, () => rnd());
+        inv.tanks = readingsFor(centre, t2 * 1.004, () => rnd(), profile);
+      } else {
+        inv.closing = buildClosing(inv, centre, demoCfg);
       }
       all.push(inv);
     }

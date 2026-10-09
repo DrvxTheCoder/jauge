@@ -21,14 +21,14 @@ import {
   ArrowDown,
 } from "@/components/ui/icons";
 import { useStore } from "@/lib/store";
-import { Toast } from "@/components/ui/primitives";
 import { Select } from "@/components/ui/select";
 import { CommandMenu } from "./command-menu";
+import { Island } from "./island";
 import { cn, fmtDate } from "@/lib/format";
 
 gsap.registerPlugin(useGSAP);
 
-export const PRODUCT = "Jauge"; // placeholder product name
+export const PRODUCT = "Smart GPL"; // placeholder product name
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -179,7 +179,7 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-800 text-white">
               <Logo className="size-7" />
             </span>
-            <span className={cn("text-[22px] font-semibold tracking-[-0.02em]", fade)}>{PRODUCT}</span>
+            <span className={cn("text-[22px] font-extrabold tracking-[-0.02em]", fade)}>{PRODUCT}</span>
           </Link>
           <button className="grid size-9 place-items-center rounded-full lg:hidden" onClick={onClose} aria-label="Fermer le menu">
             <X className="size-5" />
@@ -233,7 +233,7 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
           <ul className="space-y-0.5">
             <li>
               <button
-                onClick={() => toast("Le centre d'aide arrive dans la version complète")}
+                onClick={() => toast("Centre d'aide à venir")}
                 className={cn(itemCls, "text-muted hover:bg-card/70 hover:text-ink")}
                 {...bind("Aide")}
               >
@@ -243,7 +243,7 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
             </li>
             <li>
               <button
-                onClick={() => toast("Déconnexion désactivée dans le prototype")}
+                onClick={() => toast("Déconnexion désactivée")}
                 className={cn(itemCls, "text-muted hover:bg-card/70 hover:text-ink")}
                 {...bind("Déconnexion")}
               >
@@ -267,14 +267,14 @@ function Sidebar({ open, onClose, collapsed }: { open: boolean; onClose: () => v
             <p className="mt-3 text-[16px] leading-snug font-medium">{reportLabel}</p>
             <p className="mt-1 text-[12px] text-white/70">{config.branding.companyName}, tous centres</p>
             <button
-              onClick={() => toast("Export PDF disponible dans la version complète")}
+              onClick={() => toast("Export PDF à venir")}
               className="mt-4 h-10 w-full rounded-full bg-brand-600 text-[14px] font-medium text-white ring-1 ring-white/15 hover:bg-brand-400 hover:text-brand-950"
             >
               Télécharger le PDF
             </button>
           </div>
           <button
-            onClick={() => toast("Export PDF disponible dans la version complète")}
+            onClick={() => toast("Export PDF à venir")}
             aria-label={`${reportLabel}, télécharger le PDF`}
             {...bind(`${reportLabel} (PDF)`)}
             className={cn(
@@ -354,7 +354,7 @@ function ScrollJump({ y, max }: { y: number; max: number }) {
 }
 
 function Topbar({ onMenu, collapsed, onCollapse, raised }: { onMenu: () => void; collapsed: boolean; onCollapse: () => void; raised: boolean }) {
-  const { user, toast, inventories, config } = useStore();
+  const { user, toast, inventories } = useStore();
   const initials = user.name.split(" ").map((p) => p[0]).join("");
   const Toggle = collapsed ? PanelLeftOpen : PanelLeftClose;
 
@@ -386,7 +386,7 @@ function Topbar({ onMenu, collapsed, onCollapse, raised }: { onMenu: () => void;
           aria-label="Notifications"
           onClick={() => {
             const alert = inventories.find((i) => i.status === "EN_COURS");
-            toast(alert ? `Inventaire du jour en cours, ${config.centres.find((c) => c.id === alert.centreId)?.name}` : "Aucune notification");
+            toast(alert ? "Inventaire en cours" : "Aucune notification", "bell");
           }}
         >
           <Bell className="size-[19px]" />
@@ -407,7 +407,7 @@ function Topbar({ onMenu, collapsed, onCollapse, raised }: { onMenu: () => void;
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const { ready, toastMsg, density } = useStore();
+  const { ready, density } = useStore();
   const path = usePathname();
   const mainRef = useRef<HTMLElement>(null);
 
@@ -475,7 +475,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <ScrollJump y={scroll.y} max={scroll.max} />
-      <Toast msg={toastMsg} />
+      <Island />
     </div>
   );
 }

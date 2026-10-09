@@ -2,13 +2,23 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_CONFIG, generateInventories } from "./seed";
+import { migrateStoredConfig, storedConfig } from "./tenant-io";
 import type { Centre, Inventory, TenantConfig } from "./types";
 
-const CONFIG_KEY = "jauge:config:v1";
+const CONFIG_KEY = "jauge:config"; // { version, config }, see STORAGE_VERSION
+const LEGACY_CONFIG_KEY = "jauge:config:v1"; // bare v1 config, migrated on boot
 const EDITS_KEY = "jauge:edits:v1"; // inventories changed on this device, by id
 const DENSITY_KEY = "jauge:density"; // a per-device display preference, not tenant config
 
 export type Density = "compact" | "expanded";
+
+/** What a notice is about; picks the island's icon, tint and how long it stays. */
+export type NoticeKind = "info" | "success" | "warning" | "error" | "expanded" | "compact" | "pause" | "bell";
+export interface Notice {
+  id: number;
+  msg: string;
+  kind: NoticeKind;
+}
 
 interface Store {
   ready: boolean;
@@ -23,8 +33,9 @@ interface Store {
   setDensity: (d: Density) => void;
   centre: (id: string) => Centre;
   user: { name: string; email: string; role: string };
-  toast: (msg: string) => void;
-  toastMsg: string | null;
+  toast: (msg: string, kind?: NoticeKind) => void;
+  notice: Notice | null; // the one on screen; a new toast replaces it
+  dismissNotice: (id: number) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -35,15 +46,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [inventories, setInventories] = useState<Inventory[]>([]);
   const [centreId, setCentreId] = useState("ruf");
   const [density, setDensityState] = useState<Density>("compact");
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const noticeSeq = useRef(0);
 
   // Client-only boot: mock data depends on "today", and saved branding lives on this device.
   useEffect(() => {
     let cfg = DEFAULT_CONFIG;
     try {
-      const raw = localStorage.getItem(CONFIG_KEY);
-      if (raw) cfg = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+      const raw = localStorage.getItem(CONFIG_KEY) ?? localStorage.getItem(LEGACY_CONFIG_KEY);
+      const m = migrateStoredConfig(raw);
+      cfg = m.config;
+      if (m.migrated) {
+        localStorage.setItem(CONFIG_KEY, storedConfig(cfg));
+        localStorage.removeItem(LEGACY_CONFIG_KEY);
+      }
+      if (m.notice) setNotice({ id: ++noticeSeq.current, msg: "Configuration restaurée", kind: "warning" });
     } catch {}
     setConfigState(cfg);
     let edits: Record<string, Inventory> = {};
@@ -65,7 +82,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setConfigState((prev) => {
       const next = fn(prev);
       try {
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(next));
+        localStorage.setItem(CONFIG_KEY, storedConfig(next));
       } catch {}
       return next;
     });
@@ -81,6 +98,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const resetConfig = useCallback(() => {
     try {
       localStorage.removeItem(CONFIG_KEY);
+      localStorage.removeItem(LEGACY_CONFIG_KEY);
       localStorage.removeItem(EDITS_KEY);
     } catch {}
     setConfigState(DEFAULT_CONFIG);
@@ -102,11 +120,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const toast = useCallback((msg: string) => {
-    setToastMsg(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastMsg(null), 2800);
+  // Latest wins: a new toast replaces the current one at once, never queues.
+  const toast = useCallback((msg: string, kind: NoticeKind = "info") => {
+    setNotice({ id: ++noticeSeq.current, msg, kind });
   }, []);
+
+  const dismissNotice = useCallback((id: number) => setNotice((n) => (n?.id === id ? null : n)), []);
 
   const centre = useCallback(
     (id: string) => config.centres.find((c) => c.id === id) ?? config.centres[0],
@@ -128,9 +147,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       centre,
       user: { name: "Awa Ndiaye", email: "a.ndiaye@baobab-energie.sn", role: "Chef de production" },
       toast,
-      toastMsg,
+      notice,
+      dismissNotice,
     }),
-    [ready, config, setConfig, resetConfig, inventories, updateInventory, centreId, density, setDensity, centre, toast, toastMsg],
+    [ready, config, setConfig, resetConfig, inventories, updateInventory, centreId, density, setDensity, centre, toast, notice, dismissNotice],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -297,11 +297,11 @@ function Inner() {
             </div>
             <p className="mt-2 text-[13px] text-muted">{centreId === "all" ? "Tous les centres" : centre(centreId).name}</p>
             <div className="mt-4 flex flex-col gap-2">
-              <Button onClick={() => toast("Génération PDF branchée sur @react-pdf/renderer dans la version complète")}>
+              <Button onClick={() => toast("Export PDF à venir")}>
                 <FileDown className="size-4" />
                 Télécharger le PDF
               </Button>
-              <Button variant="ghost" onClick={() => toast("Export Excel (3 feuilles) dans la version complète")}>
+              <Button variant="ghost" onClick={() => toast("Export Excel à venir")}>
                 <FileSpreadsheet className="size-4" />
                 Exporter en Excel
               </Button>

@@ -5,9 +5,10 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, FileDown, Lock, Moon, Pencil, Plus, Trash2 } from "@/components/ui/icons";
 import { useNow, useStore } from "@/lib/store";
-import { ecartBand, nowHHMM, summarize, tankResult, type Band } from "@/lib/calc";
+import { buildClosing, ecartBand, nowHHMM, profileFor, summarize, tankOutcomes, tankResult, type Band, type TankOutcome } from "@/lib/calc";
+import { pressureOffset } from "@/lib/correction";
 import { cap, cn, fmt, fmtDate, fmtDuration, invCode } from "@/lib/format";
-import type { Inventory, TankReading } from "@/lib/types";
+import type { CorrectionProfile, Inventory, Reservoir, TankReading } from "@/lib/types";
 import { Button, Card, CardTitle, Dialog, EcartPill, Field, NumberInput, StatusBadge, Switch, glide, inputCls, useIndicator } from "@/components/ui/primitives";
 import { Select } from "@/components/ui/select";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -30,6 +31,7 @@ export default function FichePage() {
   const [editMode, setEditMode] = useState(false);
   const [closing, setClosing] = useState(false);
   const [confirmEcart, setConfirmEcart] = useState(false);
+  const [confirmWarnings, setConfirmWarnings] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [newStop, setNewStop] = useState({ type: config.rules.stopTypes[0], minutes: 15, note: "", at: "" });
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -65,9 +67,13 @@ export default function FichePage() {
   const editable = inv.status === "EN_COURS" || editMode;
   const band = ecartBand(s.ecartPct, config.rules);
 
+  // Editing a closed inventory rewrites its snapshot, so it always matches its readings.
   const set = (fn: (i: Inventory) => Inventory) => {
     if (!editable) return;
-    updateInventory(inv.id, fn);
+    updateInventory(inv.id, (i) => {
+      const next = fn(i);
+      return next.status === "TERMINE" ? { ...next, closing: buildClosing(next, c, config) } : next;
+    });
     setSavedAt(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
   };
   const setTank = (rid: string, k: keyof TankReading, v: number) => set((i) => ({ ...i, tanks: { ...i.tanks, [rid]: { ...(i.tanks[rid] ?? EMPTY_READING), [k]: v } } }));
@@ -100,15 +106,33 @@ export default function FichePage() {
         const m = Math.max(Math.round((Date.now() - new Date(i.pausedAt).getTime()) / 60000), 1);
         stops.push({ id: crypto.randomUUID(), type: "Autre", minutes: m, note: "Arrêt en cours à la clôture", author: user.name, at: new Date().toISOString() });
       }
-      return { ...i, heureFin: fin, status: "TERMINE", pausedAt: undefined, stops };
+      const next: Inventory = { ...i, heureFin: fin, status: "TERMINE", pausedAt: undefined, stops };
+      return { ...next, closing: buildClosing(next, c, config) };
     });
     setClosing(false);
     setConfirmEcart(false);
+    setConfirmWarnings(false);
     setEditMode(false);
-    toast(editMode ? "Modifications enregistrées" : `Inventaire clôturé à ${fin}`);
+    toast(editMode ? "Modifications enregistrées" : "Inventaire clôturé", "success");
   };
 
   const needsConfirm = band === "alert";
+  const closeBlocked = s.blockedTanks.length > 0;
+  const needsWarningConfirm = s.tankWarnings.length > 0;
+
+  // Results shown per tank: the snapshot once closed, live otherwise.
+  const outcomes = tankOutcomes(inv, c, config);
+  const outcomeOf = (res: Reservoir, r: TankReading): TankOutcome => {
+    const o = outcomes[res.id];
+    if (o) return o;
+    if (inv.closing && inv.tanks[res.id]) {
+      // Had a reading but no result when the snapshot was written.
+      const prefix = `${res.name} : `;
+      const warnings = inv.closing.warnings.filter((w) => w.startsWith(prefix)).map((w) => w.slice(prefix.length));
+      return { blocked: true, profileId: "", profileVersion: 0, warnings };
+    }
+    return tankResult(r, res, profileFor(config, res));
+  };
 
   // An arrêt starts on the inventory day, or the next one for a night shift.
   const nowLocal = `${iso(now)}T${nowHHMM(now)}`;
@@ -147,7 +171,7 @@ export default function FichePage() {
               Enregistré à {savedAt}
             </span>
           )}
-          <Button variant="ghost" onClick={() => toast("Fiche d'inventaire PDF dans la version complète")}>
+          <Button variant="ghost" onClick={() => toast("Fiche PDF à venir")}>
             <FileDown className="size-4" />
             Fiche PDF
           </Button>
@@ -376,7 +400,7 @@ export default function FichePage() {
                 <div className="flex flex-col gap-4">
                   {c.reservoirs.map((res) => {
                     const r = inv.tanks[res.id] ?? EMPTY_READING;
-                    const tr = tankResult(r, res);
+                    const tr = outcomeOf(res, r);
                     return (
                       <div key={res.id} className="rounded-2xl border border-line p-4">
                         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
@@ -386,9 +410,11 @@ export default function FichePage() {
                               {res.type === "SPHERE" ? "Sphère" : res.type === "CIGARE" ? "Cigare" : "Autre"}, {fmt(res.capacityM3)} m³
                             </span>
                           </p>
-                          <div className="w-full sm:w-64">
-                            <TankLevel name="Remplissage" pct={tr.fillPct} tonnes={tr.liquidT} capT={res.capacityT} />
-                          </div>
+                          {!tr.blocked && (
+                            <div className="w-full sm:w-64">
+                              <TankLevel name="Remplissage" pct={tr.fillPct} tonnes={tr.liquidT} capT={res.capacityT} />
+                            </div>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
                           {(
@@ -406,27 +432,38 @@ export default function FichePage() {
                             </Field>
                           ))}
                         </div>
-                        <dl className="mt-4 grid grid-cols-3 gap-3 rounded-xl bg-board p-3 sm:grid-cols-6">
-                          {[
-                            ["Facteur liquide", fmt(tr.vcf, 4)],
-                            ["Facteur vapeur", fmt(tr.vapFactor, 3)],
-                            ["Densité ambiante", fmt(tr.densAmb, 4)],
-                            ["Poids liquide", `${fmt(tr.liquidT, 3)} T`],
-                            ["Poids gaz", `${fmt(tr.gasT, 3)} T`],
-                            ["Poids total", `${fmt(tr.totalT, 3)} T`],
-                          ].map(([k, v]) => (
-                            <div key={k}>
-                              <dt className="text-[11px] text-muted">{k}</dt>
-                              <dd className="tnum text-[14px] font-semibold">{v}</dd>
-                            </div>
-                          ))}
-                        </dl>
+                        {tr.blocked ? (
+                          <p className="mt-4 rounded-xl bg-alert/8 p-3 text-[13px] text-alert">
+                            Résultat indisponible : la mesure sort de la table et le profil bloque les valeurs hors table. Ce réservoir n&apos;entre pas dans le stock physique.
+                          </p>
+                        ) : (
+                          <dl className="mt-4 grid grid-cols-3 gap-3 rounded-xl bg-board p-3 sm:grid-cols-6">
+                            {[
+                              ["Correction liquide", fmt(tr.liquidFactor, 4)],
+                              ["Coefficient gaz", fmt(tr.gasCoefficient, 6)],
+                              ["Densité ambiante", fmt(tr.densAmb, 4)],
+                              ["Poids liquide", `${fmt(tr.liquidT, 3)} T`],
+                              ["Poids gaz", `${fmt(tr.gasT, 3)} T`],
+                              ["Poids total", `${fmt(tr.totalT, 3)} T`],
+                            ].map(([k, v]) => (
+                              <div key={k}>
+                                <dt className="text-[11px] text-muted">{k}</dt>
+                                <dd className="tnum text-[14px] font-semibold">{v}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        )}
+                        {tr.warnings.length > 0 && (
+                          <ul className="mt-3 space-y-1 rounded-xl bg-warn/12 px-3 py-2 text-[13px] text-[#7a5306]">
+                            {tr.warnings.map((w) => (
+                              <li key={w}>{w}</li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     );
                   })}
-                  <p className="text-[12px] text-faint">
-                    Correction de température : {config.rules.correctionTable}. Le prototype utilise une approximation linéaire ; la table officielle se branche dans le moteur de calcul.
-                  </p>
+                  <CorrectionNote inv={inv} reservoirs={c.reservoirs} outcomes={outcomes} profiles={config.correction.profiles} fallback={profileFor(config, {})} />
                 </div>
               )}
 
@@ -471,7 +508,7 @@ export default function FichePage() {
                             ],
                           }));
                           setNewStop((n) => ({ ...n, minutes: 15, note: "", at: "" }));
-                          toast(`Arrêt de ${newStop.minutes} min ajouté`);
+                          toast(`Arrêt ajouté · ${newStop.minutes} min`, "success");
                         }}
                       >
                         <Plus className="size-4" />
@@ -609,6 +646,13 @@ export default function FichePage() {
                   <dt>Stock physique</dt>
                   <dd>{fmt(s.stockPhys, 2)} T</dd>
                 </div>
+                {(closeBlocked || needsWarningConfirm) && (
+                  <p className={cn("text-[12px]", closeBlocked ? "text-alert" : "text-warn")}>
+                    {closeBlocked
+                      ? `Incomplet : ${s.blockedTanks.join(", ")} sans résultat (hors table).`
+                      : `${s.tankWarnings.length} avertissement${s.tankWarnings.length > 1 ? "s" : ""} de correction, voir l'onglet Réservoirs.`}
+                  </p>
+                )}
               </dl>
             </div>
             <div className={cn("border-t border-line p-5", band === "ok" ? "bg-ok/6" : band === "warn" ? "bg-warn/8" : "bg-alert/8")}>
@@ -655,6 +699,24 @@ export default function FichePage() {
             {fmt(Math.abs(s.ecart), 2)} T ({fmt(s.ecartPct, 2)} %)
           </dd>
         </dl>
+        {closeBlocked && (
+          <p className="mt-4 rounded-2xl border border-alert/40 bg-alert/6 p-3 text-[14px] text-alert">
+            Clôture impossible : {s.blockedTanks.join(", ")} sans résultat. La mesure sort de la table et le profil bloque les valeurs hors table. Corrigez la mesure ou changez de profil.
+          </p>
+        )}
+        {!closeBlocked && needsWarningConfirm && (
+          <div className="mt-4 rounded-2xl border border-warn/45 bg-warn/8 p-3 text-[14px]">
+            <ul className="space-y-1 text-[13px] text-[#7a5306]">
+              {s.tankWarnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+            <label className="mt-3 flex items-start gap-3">
+              <input type="checkbox" className="mt-1 size-4 accent-[var(--warn)]" checked={confirmWarnings} onChange={(e) => setConfirmWarnings(e.target.checked)} />
+              <span>J&apos;ai pris connaissance de ces avertissements et je confirme les valeurs retenues.</span>
+            </label>
+          </div>
+        )}
         {needsConfirm && (
           <label className="mt-4 flex items-start gap-3 rounded-2xl border border-alert/40 bg-alert/6 p-3 text-[14px]">
             <input type="checkbox" className="mt-1 size-4 accent-[var(--alert)]" checked={confirmEcart} onChange={(e) => setConfirmEcart(e.target.checked)} />
@@ -667,11 +729,56 @@ export default function FichePage() {
           <Button variant="ghost" onClick={() => setClosing(false)}>
             Continuer la saisie
           </Button>
-          <Button disabled={needsConfirm && !confirmEcart} onClick={close}>
+          <Button disabled={closeBlocked || (needsConfirm && !confirmEcart) || (needsWarningConfirm && !confirmWarnings)} onClick={close}>
             {editMode ? "Enregistrer" : "Clôturer"}
           </Button>
         </div>
       </Dialog>
+    </div>
+  );
+}
+
+const describe = (p: CorrectionProfile) =>
+  [
+    p.liquid.method === "ADDITIVE_TABLE" ? "liquide : table additive (d15 − correction)" : `liquide : linéaire, α = ${fmt(p.liquid.alpha, 4)} /°C`,
+    p.gas.method === "COEFFICIENT_TABLE" ? `gaz : table de coefficients, pression + ${fmt(pressureOffset(p), 2)} bar` : `gaz : gaz parfait, M = ${fmt(p.gas.molarMassKgMol, 4)} kg/mol`,
+    p.stockBasis === "TOTAL" ? "stock physique : liquide + gaz" : "stock physique : liquide",
+  ].join(" ; ");
+
+/* Which profile(s) produced the tank results, and whether they were frozen at closing. */
+function CorrectionNote({
+  inv,
+  reservoirs,
+  outcomes,
+  profiles,
+  fallback,
+}: {
+  inv: Inventory;
+  reservoirs: Reservoir[];
+  outcomes: Record<string, TankOutcome>;
+  profiles: CorrectionProfile[];
+  fallback: CorrectionProfile;
+}) {
+  const used = new Map<string, number>();
+  for (const res of reservoirs) {
+    const o = outcomes[res.id];
+    if (o && o.profileId) used.set(o.profileId, o.profileVersion);
+  }
+  if (!used.size) used.set(fallback.id, fallback.version);
+  return (
+    <div className="space-y-1.5 text-[12px] text-faint">
+      {[...used].map(([id, version]) => {
+        const p = profiles.find((x) => x.id === id);
+        if (!p) return <p key={id}>Correction de température : profil « {id} » v{version}, supprimé depuis la clôture.</p>;
+        return (
+          <p key={id}>
+            Correction de température : profil « {p.name} » v{version}
+            {inv.closing && p.version !== version ? ` (v${p.version} aujourd'hui)` : ""}, {p.product}. Source : {p.source}. {cap(describe(p))}. Températures
+            arrondies au dixième, lecture de la ligne exacte.
+          </p>
+        );
+      })}
+      {inv.closing && <p>Valeurs figées à la clôture : modifier un profil ne change pas cet inventaire.</p>}
     </div>
   );
 }

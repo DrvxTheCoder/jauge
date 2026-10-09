@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Download, Plus } from "@/components/ui/icons";
 import { useScopedInventories, useStore } from "@/lib/store";
 import { aggregate, delta, inRange, periodRange, PERIODS, type PeriodKey } from "@/lib/aggregate";
-import { ecartBand, summarize, tankResult } from "@/lib/calc";
+import { ecartBand, summarize, tankOutcomes } from "@/lib/calc";
 import { iso } from "@/lib/seed";
 import { cap, fmt, fmtDate, invCode } from "@/lib/format";
 import { Button, ButtonLink, Card, CardTitle, CornerLink, EcartPill, Segmented, StatusBadge } from "@/components/ui/primitives";
@@ -79,20 +79,27 @@ export default function Dashboard() {
     let phys = 0;
     let capT = 0;
     const tanks: { name: string; pct: number; t: number; capT: number }[] = [];
+    const blocked: string[] = [];
+    let warned = 0;
     for (const c of scopeCentres) {
       const last = invs.find((i) => i.centreId === c.id);
       if (!last) continue;
+      const results = tankOutcomes(last, c, config);
       for (const res of c.reservoirs) {
-        const r = last.tanks[res.id];
-        if (!r) continue;
-        const tr = tankResult(r, res);
+        const tr = results[res.id];
+        if (!tr) continue;
+        if (tr.warnings.length) warned++;
+        if (tr.blocked) {
+          blocked.push(res.name);
+          continue;
+        }
         phys += tr.liquidT;
         capT += res.capacityT;
         tanks.push({ name: scopeCentres.length > 1 ? `${res.name}, ${c.code}` : res.name, pct: tr.fillPct, t: tr.liquidT, capT: res.capacityT });
       }
     }
-    return { phys, capT, pct: capT ? (phys / capT) * 100 : 0, tanks };
-  }, [invs, scopeCentres]);
+    return { phys, capT, pct: capT ? (phys / capT) * 100 : 0, tanks, blocked, warned };
+  }, [invs, scopeCentres, config]);
 
   const recent = invs.slice(0, 5);
   const curLabel = period === "jour" ? fmtDate(cur[0], { weekday: "long", day: "numeric", month: "long" }) : `${fmtDate(cur[0], { day: "numeric", month: "short" })} au ${fmtDate(cur[1], { day: "numeric", month: "short" })}`;
@@ -113,9 +120,9 @@ export default function Dashboard() {
               Saisir l&apos;inventaire du jour
             </ButtonLink>
           ) : (
-            <Button onClick={() => toast("Aucun centre sélectionné")}>Démarrer un inventaire</Button>
+            <Button onClick={() => toast("Aucun centre sélectionné", "warning")}>Démarrer un inventaire</Button>
           )}
-          <Button variant="ghost" onClick={() => toast("Export du tableau de bord disponible dans la version complète")}>
+          <Button variant="ghost" onClick={() => toast("Export à venir")}>
             <Download className="size-4" />
             Exporter
           </Button>
@@ -274,6 +281,12 @@ export default function Dashboard() {
             ))}
           </div>
           <p className="mt-5 text-[12px] text-muted">Dernière mesure saisie. Poids liquide corrigé à la température.</p>
+          {(stock.blocked.length > 0 || stock.warned > 0) && (
+            <p className="mt-1.5 text-[12px] text-warn">
+              {stock.blocked.length > 0 && `Sans résultat, mesure hors table : ${stock.blocked.join(", ")}. `}
+              {stock.warned > 0 && `${stock.warned} réservoir${stock.warned > 1 ? "s" : ""} avec avertissement de correction. Voir la fiche du jour.`}
+            </p>
+          )}
         </Card>
 
         {/* Gauge */}

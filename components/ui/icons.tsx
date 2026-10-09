@@ -13,12 +13,14 @@ import {
   Calendar03Icon,
   Cancel01Icon,
   Clock01Icon,
+  Copy01Icon,
   ComputerIcon,
   CustomerSupportIcon,
   CylinderIcon,
   DashboardSquare01Icon,
   Delete02Icon,
   FileExportIcon,
+  FileImportIcon,
   Factory01Icon,
   LogoutSquare02Icon,
   Menu09Icon,
@@ -75,6 +77,8 @@ export const Check = make(Tick02Icon);
 export const Download = make(FileExportIcon);
 export const FileDown = make(FileExportIcon);
 export const FileSpreadsheet = make(Xls02Icon);
+export const FileUp = make(FileImportIcon);
+export const Copy = make(Copy01Icon);
 export const RotateCcw = make(RotateLeft01Icon);
 export const Play = make(PlayIcon);
 export const Pause = make(PauseIcon);

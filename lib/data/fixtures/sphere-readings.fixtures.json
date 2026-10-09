@@ -1,0 +1,150 @@
+{
+  "description": "Six real tank readings from the legacy Excel bordereaux (11/11/2025), recomputed with the corrected standard butane table. Method: ambientDensity = d15 - liquid_correction(tLiq); liquidT = volLiqM3 * ambientDensity; gasT = (capacityM3 - volLiqM3) * gas_coefficient(tVap) * (pressureBar + 1); totalT = liquidT + gasT. tVap equals tLiq in every fixture because the legacy sheets use a single temperature. Tolerance: 1e-6 t. legacyExcelGasCoefficient is what was hand-typed in the old sheets (wrong in 4 of 6); it is informational only. movements[].expected = (minuend - subtrahend) for liquidT and totalT; feuil3-livraison is a quantity leaving the sphere, so its minuend is the before-reading.",
+  "profile": "standard-butane",
+  "table": "butane-standard-15-36.csv",
+  "readings": [
+    {
+      "id": "feuil1-apres",
+      "tank": "D100",
+      "capacityM3": 3304.491,
+      "tLiq": 27.1,
+      "tVap": 27.1,
+      "pressureBar": 2.8,
+      "d15": 0.586,
+      "volLiqM3": 1314.539,
+      "expected": {
+        "liquidCorrection": 0.014,
+        "gasCoefficient": 0.00233,
+        "ambientDensity": 0.572,
+        "liquidT": 751.916308,
+        "gasT": 17.619035,
+        "totalT": 769.535343
+      },
+      "legacyExcelGasCoefficient": 0.00233
+    },
+    {
+      "id": "feuil1-avant",
+      "tank": "D100",
+      "capacityM3": 3304.491,
+      "tLiq": 26.8,
+      "tVap": 26.8,
+      "pressureBar": 2.8,
+      "d15": 0.586,
+      "volLiqM3": 928.357,
+      "expected": {
+        "liquidCorrection": 0.0137,
+        "gasCoefficient": 0.002333,
+        "ambientDensity": 0.5723,
+        "liquidT": 531.298711,
+        "gasT": 21.065378,
+        "totalT": 552.364089
+      },
+      "legacyExcelGasCoefficient": 0.002325
+    },
+    {
+      "id": "feuil2-avant",
+      "tank": "SO2",
+      "capacityM3": 3297.61,
+      "tLiq": 29.5,
+      "tVap": 29.5,
+      "pressureBar": 1.3,
+      "d15": 0.5777,
+      "volLiqM3": 2629.591,
+      "expected": {
+        "liquidCorrection": 0.0168,
+        "gasCoefficient": 0.002307,
+        "ambientDensity": 0.5609,
+        "liquidT": 1474.937592,
+        "gasT": 3.544576,
+        "totalT": 1478.482168
+      },
+      "legacyExcelGasCoefficient": 0.002307
+    },
+    {
+      "id": "feuil2-apres",
+      "tank": "SO2",
+      "capacityM3": 3297.61,
+      "tLiq": 29.2,
+      "tVap": 29.2,
+      "pressureBar": 1.3,
+      "d15": 0.5777,
+      "volLiqM3": 2628.049,
+      "expected": {
+        "liquidCorrection": 0.0164,
+        "gasCoefficient": 0.002309,
+        "ambientDensity": 0.5613,
+        "liquidT": 1475.123904,
+        "gasT": 3.555838,
+        "totalT": 1478.679741
+      },
+      "legacyExcelGasCoefficient": 0.00235
+    },
+    {
+      "id": "feuil3-apres",
+      "tank": "S03",
+      "capacityM3": 3324.468,
+      "tLiq": 29.2,
+      "tVap": 29.2,
+      "pressureBar": 2.5,
+      "d15": 0.5772,
+      "volLiqM3": 2727.28,
+      "expected": {
+        "liquidCorrection": 0.0164,
+        "gasCoefficient": 0.002309,
+        "ambientDensity": 0.5608,
+        "liquidT": 1529.458624,
+        "gasT": 4.826175,
+        "totalT": 1534.284799
+      },
+      "legacyExcelGasCoefficient": 0.002303
+    },
+    {
+      "id": "feuil3-avant",
+      "tank": "S03",
+      "capacityM3": 3324.468,
+      "tLiq": 28.5,
+      "tVap": 28.5,
+      "pressureBar": 2.5,
+      "d15": 0.5772,
+      "volLiqM3": 2724.941,
+      "expected": {
+        "liquidCorrection": 0.0156,
+        "gasCoefficient": 0.002316,
+        "ambientDensity": 0.5616,
+        "liquidT": 1530.326866,
+        "gasT": 4.859766,
+        "totalT": 1535.186631
+      },
+      "legacyExcelGasCoefficient": 0.002345
+    }
+  ],
+  "movements": [
+    {
+      "id": "feuil1-reception",
+      "expected": {
+        "liquidT": 220.617597,
+        "totalT": 217.171254
+      },
+      "minuend": "feuil1-apres",
+      "subtrahend": "feuil1-avant"
+    },
+    {
+      "id": "feuil2-reception",
+      "expected": {
+        "liquidT": 0.186312,
+        "totalT": 0.197574
+      },
+      "minuend": "feuil2-apres",
+      "subtrahend": "feuil2-avant"
+    },
+    {
+      "id": "feuil3-livraison",
+      "expected": {
+        "liquidT": 0.868242,
+        "totalT": 0.901833
+      },
+      "minuend": "feuil3-avant",
+      "subtrahend": "feuil3-apres"
+    }
+  ]
+}

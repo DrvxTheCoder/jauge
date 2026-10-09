@@ -1,56 +1,48 @@
-import type { Centre, Inventory, Reservoir, Rules, TankReading, TenantConfig } from "./types";
+import type { Centre, Inventory, InventoryClosing, Rules, TankOutcome, TankResult, TenantConfig } from "./types";
+import { profileFallbackWarning, profileFor, roundT, tankResult } from "./correction";
 
 /* ------------------------------------------------------------------
-   Measurement engine (prototype).
-   Production version: plug the standard LPG volume-correction tables
-   (ASTM D1250 / API MPMS 11.2.4, Table 54E) keyed on density @15°C and
-   temperature in 0.1°C steps — round with Math.round(t * 10) / 10.
-   Here a linear expansion approximation stands in for the lookup.
+   Measurement engine. Tank tonnage comes from the tenant's correction
+   profiles (lib/correction). This module adds the per-inventory view:
+   live results while an inventory is open, the frozen snapshot once closed.
    ------------------------------------------------------------------ */
 
-const ALPHA = 0.00275; // ~ thermal expansion of commercial butane/propane mix, per °C
-const R = 8.314462;
-const MOLAR_MASS = 0.0552; // kg/mol, butane-rich mix
-const ATM = 1.01325;
+export { ambientDensity, gasMass, profileFor, tankResult } from "./correction";
+export type { TankOutcome, TankResult } from "./types";
 
-export const round1 = (t: number) => Math.round(t * 10) / 10;
+export const round1 = roundT;
 
-/** Liquid volume correction factor to 15°C. */
-export function vcfLiquid(tC: number): number {
-  return 1 - ALPHA * (round1(tC) - 15);
+/** Results computed now, with the current profiles, for every tank that has a reading. */
+export function liveTankOutcomes(inv: Inventory, centre: Centre, cfg: TenantConfig): Record<string, TankOutcome> {
+  const out: Record<string, TankOutcome> = {};
+  for (const res of centre.reservoirs) {
+    const r = inv.tanks[res.id];
+    if (!r) continue;
+    const o = tankResult(r, res, profileFor(cfg, res));
+    const fallback = profileFallbackWarning(cfg, res);
+    out[res.id] = fallback ? { ...o, warnings: [fallback, ...o.warnings] } : o;
+  }
+  return out;
 }
 
-/** Vapour factor: converts headspace volume to equivalent at 15°C / 1 atm. */
-export function vapourFactor(tC: number, gaugeBar: number): number {
-  return (288.15 / (tC + 273.15)) * ((gaugeBar + ATM) / ATM);
+/** What the inventory shows: the closing snapshot when there is one, live results otherwise. */
+export function tankOutcomes(inv: Inventory, centre: Centre, cfg: TenantConfig): Record<string, TankOutcome> {
+  return inv.closing ? inv.closing.tanks : liveTankOutcomes(inv, centre, cfg);
 }
 
-export interface TankResult {
-  vcf: number;
-  vapFactor: number;
-  densAmb: number; // t/m³ at ambient
-  liquidT: number;
-  gasT: number;
-  totalT: number;
-  fillPct: number; // of capacity in tonnes
-}
-
-export function tankResult(r: TankReading, res: Reservoir): TankResult {
-  const vcf = vcfLiquid(r.tLiq);
-  const densAmb = r.d15 * vcf;
-  const liquidT = r.volLiqM3 * densAmb;
-  const vapVol = Math.max(res.capacityM3 - r.volLiqM3, 0);
-  const pAbsPa = (r.pressureBar + ATM) * 1e5;
-  const gasT = (pAbsPa * vapVol * MOLAR_MASS) / (R * (r.tVap + 273.15)) / 1000;
-  return {
-    vcf,
-    vapFactor: vapourFactor(r.tVap, r.pressureBar),
-    densAmb,
-    liquidT,
-    gasT,
-    totalT: liquidT + gasT,
-    fillPct: res.capacityT ? (liquidT / res.capacityT) * 100 : 0,
-  };
+/** Freezes the factors used for each tank. Written at closing and on every admin edit of a closed inventory. */
+export function buildClosing(inv: Inventory, centre: Centre, cfg: TenantConfig): InventoryClosing {
+  const live = liveTankOutcomes(inv, centre, cfg);
+  const tanks: Record<string, TankResult> = {};
+  const warnings: string[] = [];
+  for (const res of centre.reservoirs) {
+    const o = live[res.id];
+    if (!o) continue;
+    for (const w of o.warnings) warnings.push(`${res.name} : ${w}`);
+    if (!o.blocked) tanks[res.id] = o;
+  }
+  const p = profileFor(cfg, {});
+  return { profileId: p.id, profileVersion: p.version, tanks, warnings };
 }
 
 /* ---------------- time ---------------- */
@@ -98,6 +90,9 @@ export interface InventorySummary {
   nightTph: number;
   nightCapacityPct: number;
   stockCapacityT: number;
+  frozen: boolean; // tank results come from the closing snapshot
+  tankWarnings: string[]; // prefixed with the tank name
+  blockedTanks: string[]; // names of tanks with a reading but no result
 }
 
 const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -120,11 +115,18 @@ export function summarize(inv: Inventory, centre: Centre, cfg: TenantConfig, now
   const night = inv.night.enabled ? bottleTonnes(inv.night.bottles, cfg) : { t: 0, n: 0 };
 
   const stockTheo = inv.stockInitial - night.t + approT - vracT - day.t;
+  // Physical stock counts what each tank's profile says (liquid, or liquid + gas).
+  const tanks = tankOutcomes(inv, centre, cfg);
   let stockPhys = 0;
+  const tankWarnings: string[] = [];
+  const blockedTanks: string[] = [];
   for (const res of centre.reservoirs) {
-    const r = inv.tanks[res.id];
-    if (r) stockPhys += tankResult(r, res).liquidT;
+    const o = tanks[res.id];
+    if (o && !o.blocked) stockPhys += o.stockT;
+    if (inv.tanks[res.id] && (!o || o.blocked)) blockedTanks.push(res.name);
+    if (o && !inv.closing) for (const w of o.warnings) tankWarnings.push(`${res.name} : ${w}`);
   }
+  if (inv.closing) tankWarnings.push(...inv.closing.warnings);
   const ecart = stockPhys - stockTheo;
   const ecartPct = stockTheo ? (ecart / stockTheo) * 100 : 0;
 
@@ -164,6 +166,9 @@ export function summarize(inv: Inventory, centre: Centre, cfg: TenantConfig, now
     nightTph,
     nightCapacityPct: nightCap ? (nightTph / nightCap) * 100 : 0,
     stockCapacityT: centre.reservoirs.reduce((a, r) => a + r.capacityT, 0),
+    frozen: !!inv.closing,
+    tankWarnings,
+    blockedTanks,
   };
 }
 

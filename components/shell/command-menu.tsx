@@ -96,11 +96,11 @@ export function CommandMenu({ collapsed, onCollapse }: { collapsed: boolean; onC
     collapse: onCollapse,
   });
   actions.current = {
-    openToday: () => (today ? router.push(`/inventaires/${today.id}`) : toast("Aucun inventaire en cours")),
+    openToday: () => (today ? router.push(`/inventaires/${today.id}`) : toast("Aucun inventaire en cours", "warning")),
     toggleWidth: () => {
       const next = density === "compact" ? "expanded" : "compact";
       setDensity(next);
-      toast(next === "expanded" ? "Vue étendue" : "Vue compacte");
+      toast(next === "expanded" ? "Vue étendue" : "Vue compacte", next);
     },
     collapse: onCollapse,
   };

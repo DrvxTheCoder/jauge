@@ -11,6 +11,7 @@ npm install
 npm run dev        # http://localhost:3000
 # or
 npm run build && npm start
+npm test           # Vitest: correction engine, demo data, config migration
 ```
 
 Node 20+ recommended. No database or environment variables needed.
@@ -34,7 +35,9 @@ components/ui           shadcn-style primitives (Button, Card, Segmented, Switch
 components/charts       hand-built SVG charts (bars, half gauge, donut, line, sparkline)
 components/production   rolling-digit clock, live timer card, tank level
 lib/types.ts            domain model (TenantConfig, Centre, Reservoir, Inventory…)
-lib/calc.ts             measurement engine + mass balance + times/yields
+lib/calc.ts             per-inventory tank results, closing snapshots, mass balance, times/yields
+lib/correction/         temperature correction engine (pure): table lookup, validation, CSV, profiles
+lib/tenant-io.ts        config validation, JSON template import/export, localStorage migration
 lib/aggregate.ts        period ranges and aggregation
 lib/seed.ts             demo tenant + deterministic 150-day data generator
 lib/store.tsx           client store (config, inventories, selected centre, toasts)
@@ -50,9 +53,13 @@ the app and the report header preview. Status colours (ok / warn / alert) are fi
 
 - **Data:** generated client-side from today's date; deterministic per day. Configuration and edited
   inventories persist in `localStorage` ("Restaurer la démo" in Paramètres clears both).
-- **Correction factors:** `lib/calc.ts` uses a linear thermal-expansion approximation where the
-  ASTM D1250 Table 54E lookup belongs (keep the `Math.round(t * 10) / 10` rounding when plugging it in).
-  Vapour mass uses the ideal-gas law with a butane-rich molar mass.
+- **Correction factors:** each tenant has correction profiles (Paramètres, Règles de calcul). The
+  default reproduces the legacy sheets: `ambientDensity = d15 − liquidCorrection(tLiq)`,
+  `gasT = (capacityM3 − volLiqM3) × gasCoefficient(tVap) × (pressureBar + 1)`. The temperature is
+  rounded to tenths and the exact row is read; there is no interpolation. The built-in table is
+  `lib/data/correction/butane-standard-15-36.csv`. `npm run gen:table` turns it into
+  `lib/correction/default-table.ts`. Its `source` field is a placeholder: fill in the exact normative
+  reference before production use. Closed inventories keep a snapshot of the factors they used.
 - **Exports, auth, notifications, help:** buttons show a toast.
 - **shadcn/ui & ReUI:** not installed (registries unreachable from the build sandbox). Primitives in
   `components/ui` follow shadcn conventions and can be swapped for the real ones.
@@ -60,7 +67,7 @@ the app and the report header preview. Status colours (ok / warn / alert) are fi
 ## Suggested next steps toward the full product
 
 1. Prisma schema with `tenantId` on every table + Postgres row-level security; mirror `lib/types.ts`.
-2. Move `lib/calc.ts` into its own package with the official tables and regression fixtures from real monthly reports.
+2. Move `lib/correction` into its own package, with regression fixtures kept outside the demo repository.
 3. Tank calibration tables (height → volume) per reservoir.
 4. Server actions / route handlers replacing the client store; audit log on edits of closed inventories.
 5. PDF (react-pdf) and Excel exports using tenant branding.

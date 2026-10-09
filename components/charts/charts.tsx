@@ -276,7 +276,7 @@ export function TimeRings({ totalMin, utileMin }: { totalMin: number; utileMin: 
                 <AnimatedNumber value={data ? data.value : h(total)} decimals={1} suffix=" h" />
               </p>
               <p className="tnum mt-1.5 text-[12px] text-muted">
-                {data ? "de temps utile" : <>de production (<AnimatedNumber value={pct} decimals={0} suffix=" %" /> utile)</>}
+                {data ? "de temps utile" : <>de production <br /> (<AnimatedNumber value={pct} decimals={0} suffix=" %" /> utile)</>}
               </p>
             </div>
           )}

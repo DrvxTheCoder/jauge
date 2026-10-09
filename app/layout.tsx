@@ -5,7 +5,7 @@ import { StoreProvider } from "@/lib/store";
 import { AppShell } from "@/components/shell/app-shell";
 
 export const metadata: Metadata = {
-  title: "Jauge — Production GPL",
+  title: "Smart GPL",
   description: "Suivi de production GPL : inventaires journaliers, bilans de stock, réservoirs et rendements.",
 };
 

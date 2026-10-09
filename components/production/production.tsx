@@ -7,10 +7,10 @@ import { cn, fmt } from "@/lib/format";
 import type { Inventory } from "@/lib/types";
 
 /* Rolling odometer digits — each digit is a 0–9 column that slides. */
-function Digit({ d }: { d: number }) {
+function Digit({ d, tight }: { d: number; tight?: boolean }) {
   return (
     <span
-      className="relative inline-block h-[1em] w-[0.70em] overflow-hidden leading-none"
+      className={cn("relative inline-block h-[1em] overflow-hidden leading-none", tight ? "w-[0.68em]" : "w-[0.70em]")}
       aria-hidden
     >
       <span
@@ -30,7 +30,8 @@ function Digit({ d }: { d: number }) {
   );
 }
 
-export function RollingClock({ seconds, className }: { seconds: number; className?: string }) {
+/** `tight` packs the digits closer, for small sizes where fixed gaps read loose. */
+export function RollingClock({ seconds, className, tight }: { seconds: number; className?: string; tight?: boolean }) {
   const s = Math.max(Math.floor(seconds), 0);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -40,10 +41,10 @@ export function RollingClock({ seconds, className }: { seconds: number; classNam
   return (
     <span role="timer" aria-label={label} className={cn("tnum inline-flex items-center font-medium tracking-[-0.03em]", className)}>
       {parts.map((p, i) => (
-        <span key={i} className="inline-flex items-center gap-0.5">
-          {i > 0 && <span className="-translate-y-[0.06em] opacity-70">:</span>}
-          <Digit d={Number(p[0])} />
-          <Digit d={Number(p[1])} />
+        <span key={i} className={cn("inline-flex items-center", tight ? "gap-0" : "gap-0.5")}>
+          {i > 0 && <span className={cn("-translate-y-[0.06em] opacity-70", tight && "mx-[0.04em]")}>:</span>}
+          <Digit d={Number(p[0])} tight={tight} />
+          <Digit d={Number(p[1])} tight={tight} />
         </span>
       ))}
     </span>
@@ -62,19 +63,16 @@ export function liveSeconds(inv: Inventory, now: Date, lunchMin: number) {
   return Math.max(elapsed - stops - paused, 0);
 }
 
-export function LiveTimerCard({ inv, compact }: { inv: Inventory; compact?: boolean }) {
-  const now = useNow(1000);
-  const { config, updateInventory, toast, user } = useStore();
-  const secs = inv.status === "EN_COURS" ? liveSeconds(inv, now, config.rules.lunchBreakMin) : 0;
-  const pausedFor = inv.pausedAt ? Math.floor((now.getTime() - new Date(inv.pausedAt).getTime()) / 1000) : 0;
-
-  const toggle = () => {
+/** Starts a stop (productive time pauses), or ends the running one and records it. */
+export function useStopToggle(inv: Inventory) {
+  const { updateInventory, toast, user } = useStore();
+  return () => {
     if (!inv.pausedAt) {
       updateInventory(inv.id, (i) => ({ ...i, pausedAt: new Date().toISOString() }));
-      toast("Arrêt démarré : le temps utile est en pause");
+      toast("Arrêt démarré", "pause");
       return;
     }
-    const minutes = Math.max(Math.round(pausedFor / 60), 1);
+    const minutes = Math.max(Math.round((Date.now() - new Date(inv.pausedAt).getTime()) / 60000), 1);
     updateInventory(inv.id, (i) => ({
       ...i,
       pausedAt: undefined,
@@ -83,8 +81,17 @@ export function LiveTimerCard({ inv, compact }: { inv: Inventory; compact?: bool
         { id: crypto.randomUUID(), type: "Autre", minutes, note: "Saisi depuis le chronomètre", author: user.name, at: new Date().toISOString() },
       ],
     }));
-    toast(`Arrêt de ${minutes} min ajouté. Précisez son type dans l'onglet Arrêts.`);
+    toast(`Arrêt ajouté · ${minutes} min`, "success");
   };
+}
+
+export function LiveTimerCard({ inv, compact }: { inv: Inventory; compact?: boolean }) {
+  const now = useNow(1000);
+  const { config } = useStore();
+  const secs = inv.status === "EN_COURS" ? liveSeconds(inv, now, config.rules.lunchBreakMin) : 0;
+  const pausedFor = inv.pausedAt ? Math.floor((now.getTime() - new Date(inv.pausedAt).getTime()) / 1000) : 0;
+
+  const toggle = useStopToggle(inv);
 
   return (
     <div className={cn("surface-deep contours relative flex h-full flex-col overflow-hidden rounded-[var(--radius-card)] p-5", compact && "p-4")}>

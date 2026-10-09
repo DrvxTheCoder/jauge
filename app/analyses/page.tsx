@@ -120,7 +120,7 @@ export default function AnalysesPage() {
             onChange={setRange}
             label="Période"
           />
-          <Button variant="ghost" onClick={() => toast("Export Excel dans la version complète")}>
+          <Button variant="ghost" onClick={() => toast("Export Excel à venir")}>
             <FileSpreadsheet className="size-4" />
             Excel
           </Button>
@@ -181,11 +181,11 @@ export default function AnalysesPage() {
               </div>
             </dl>
             <div className="flex flex-col gap-2.5 pt-4">
-              <Button onClick={() => toast("Rapport mensuel PDF dans la version complète")}>
+              <Button onClick={() => toast("Rapport PDF à venir")}>
                 <FileDown className="size-4" />
                 Rapport mensuel PDF
               </Button>
-              <Button variant="ghost" onClick={() => toast("Export Excel dans la version complète")}>
+              <Button variant="ghost" onClick={() => toast("Export Excel à venir")}>
                 <FileSpreadsheet className="size-4" />
                 Export Excel
               </Button>
@@ -230,7 +230,7 @@ export default function AnalysesPage() {
           </div>
         </Card>
 
-        <Card className="sm:col-span-2 xl:col-span-4">
+        <Card className="col-span-2">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>Écarts sur 20 semaines</CardTitle>
