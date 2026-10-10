@@ -221,6 +221,78 @@ textarea:focus-visible {
   mask-size: 7px 7px;
 }
 
+/* Tank illustrations. `--liq` is set per tank from its level tone; the
+   surface and depth tints derive from it. Waves only move on X (the path
+   is twice the clip width, so shifting by one width loops seamlessly). */
+.tank-art {
+  --liq-hi: color-mix(in oklab, var(--liq) 72%, white);
+  --liq-crest: color-mix(in oklab, var(--liq) 45%, white);
+  --liq-deep: color-mix(in oklab, var(--liq) 78%, black);
+  display: block;
+  overflow: visible;
+}
+@keyframes tank-wave {
+  to {
+    transform: translateX(var(--wave-shift));
+  }
+}
+.tank-wave {
+  animation: tank-wave 6s linear infinite;
+  will-change: transform;
+}
+.tank-wave--back {
+  animation-duration: 9s;
+  animation-direction: reverse;
+}
+@keyframes tank-bubble {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.55;
+  }
+  75% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(var(--rise));
+    opacity: 0;
+  }
+}
+.tank-bubble {
+  fill: var(--liq-crest);
+  opacity: 0;
+  animation: tank-bubble 6s ease-in infinite;
+}
+.tank-art.is-paused * {
+  animation-play-state: paused;
+}
+@media (max-width: 639px) {
+  .tank-bubble {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tank-wave,
+  .tank-bubble {
+    animation: none !important;
+  }
+}
+
+/* Tank slider: native scroll-snap, the bar hidden (swipe, trackpad and the arrows still scroll it). */
+.tank-slider {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.tank-slider::-webkit-scrollbar {
+  display: none;
+}
+.tank-slider > * {
+  scroll-snap-align: start;
+}
+
 /* Hero card surface */
 .surface-deep {
   background:

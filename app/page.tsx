@@ -10,7 +10,8 @@ import { iso } from "@/lib/seed";
 import { cap, fmt, fmtDate, invCode } from "@/lib/format";
 import { Button, ButtonLink, Card, CardTitle, CornerLink, EcartPill, Segmented, StatusBadge } from "@/components/ui/primitives";
 import { AnimatedNumber, SemiGauge, WeekBars, type BarDatum } from "@/components/charts/charts";
-import { LiveTimerCard, TankLevel } from "@/components/production/production";
+import { LiveTimerCard } from "@/components/production/production";
+import { ReservoirsCard, type TankStock } from "@/components/tanks/ReservoirsCard";
 
 function Trend({ value, invert, dark }: { value: number | null; invert?: boolean; dark?: boolean }) {
   if (value == null) return <span className={dark ? "text-white/70" : "text-muted"}>Pas de période de comparaison</span>;
@@ -78,7 +79,7 @@ export default function Dashboard() {
   const stock = useMemo(() => {
     let phys = 0;
     let capT = 0;
-    const tanks: { name: string; pct: number; t: number; capT: number }[] = [];
+    const tanks: TankStock[] = [];
     const blocked: string[] = [];
     let warned = 0;
     for (const c of scopeCentres) {
@@ -95,7 +96,7 @@ export default function Dashboard() {
         }
         phys += tr.liquidT;
         capT += res.capacityT;
-        tanks.push({ name: scopeCentres.length > 1 ? `${res.name}, ${c.code}` : res.name, pct: tr.fillPct, t: tr.liquidT, capT: res.capacityT });
+        tanks.push({ key: `${c.id}-${res.id}`, name: scopeCentres.length > 1 ? `${res.name}, ${c.code}` : res.name, type: res.type, pct: tr.fillPct, t: tr.liquidT, capT: res.capacityT });
       }
     }
     return { phys, capT, pct: capT ? (phys / capT) * 100 : 0, tanks, blocked, warned };
@@ -268,26 +269,7 @@ export default function Dashboard() {
         <div className="[grid-area:tr]">{todayInv && <LiveTimerCard inv={todayInv} />}</div>
 
         {/* Tanks */}
-        <Card className="[grid-area:tm]">
-          <div className="mb-4 flex items-center justify-between">
-            <CardTitle>Réservoirs</CardTitle>
-            <Link href="/parametres?tab=reservoirs" className="rounded-full border border-ink/70 px-3 py-1 text-[13px] font-medium hover:bg-brand-50">
-              Configurer
-            </Link>
-          </div>
-          <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
-            {stock.tanks.map((t) => (
-              <TankLevel key={t.name} name={t.name} pct={t.pct} tonnes={t.t} capT={t.capT} />
-            ))}
-          </div>
-          <p className="mt-5 text-[12px] text-muted">Dernière mesure saisie. Poids liquide corrigé à la température.</p>
-          {(stock.blocked.length > 0 || stock.warned > 0) && (
-            <p className="mt-1.5 text-[12px] text-warn">
-              {stock.blocked.length > 0 && `Sans résultat, mesure hors table : ${stock.blocked.join(", ")}. `}
-              {stock.warned > 0 && `${stock.warned} réservoir${stock.warned > 1 ? "s" : ""} avec avertissement de correction. Voir la fiche du jour.`}
-            </p>
-          )}
-        </Card>
+        <ReservoirsCard className="[grid-area:tm]" tanks={stock.tanks} blocked={stock.blocked} warned={stock.warned} />
 
         {/* Gauge */}
         <Card className="flex flex-col [grid-area:pg]">

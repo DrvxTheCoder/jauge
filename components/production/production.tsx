@@ -4,6 +4,7 @@ import { Pause, Play } from "@/components/ui/icons";
 import { toMin } from "@/lib/calc";
 import { useNow, useStore } from "@/lib/store";
 import { cn, fmt } from "@/lib/format";
+import { levelTone, type LevelTone } from "@/lib/tankLevel";
 import type { Inventory } from "@/lib/types";
 
 /* Rolling odometer digits — each digit is a 0–9 column that slides. */
@@ -139,7 +140,10 @@ export function LiveTimerCard({ inv, compact }: { inv: Inventory; compact?: bool
 }
 
 /* Horizontal tank level: liquid solid, headspace hatched. */
-export function TankLevel({ name, pct, tonnes, capT }: { name: string; pct: number; tonnes: number; capT: number }) {
+const TONE_BAR: Record<LevelTone, string> = { ok: "bg-brand-800", warn: "bg-warn", alert: "bg-alert" };
+
+/** Name and tonnage over a fill bar. `children` (e.g. an illustration) sits between the two. */
+export function TankLevel({ name, pct, tonnes, capT, children }: { name: string; pct: number; tonnes: number; capT: number; children?: React.ReactNode }) {
   const p = Math.min(Math.max(pct, 0), 100);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2">
@@ -147,11 +151,17 @@ export function TankLevel({ name, pct, tonnes, capT }: { name: string; pct: numb
       <span className="tnum text-[13px] text-muted">
         <b className="font-semibold text-ink">{fmt(tonnes, 1)}</b> / {fmt(capT, 0)} T
       </span>
-      <div className="hatch col-span-2 h-3 overflow-hidden rounded-full">
-        <div
-          className={cn("absolute inset-y-0 left-0 rounded-full transition-[width] duration-700", p < 15 ? "bg-alert" : p > 90 ? "bg-warn" : "bg-brand-800")}
-          style={{ width: `${p}%` }}
-        />
+      {children && <div className="col-span-2">{children}</div>}
+      <div
+        className="hatch col-span-2 h-3 overflow-hidden rounded-full"
+        role="progressbar"
+        aria-label={`Remplissage ${name}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(p)}
+        aria-valuetext={`${fmt(p, 0)} %, ${fmt(tonnes, 1)} T sur ${fmt(capT, 0)} T`}
+      >
+        <div className={cn("absolute inset-y-0 left-0 rounded-full transition-[width] duration-700", TONE_BAR[levelTone(p)])} style={{ width: `${p}%` }} />
       </div>
     </div>
   );
